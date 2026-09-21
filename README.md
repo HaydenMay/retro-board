@@ -54,7 +54,7 @@ In the GitHub repository’s **Settings → Secrets and variables → Actions**:
 2. In **Settings → Pages**, set Source to **GitHub Actions**.
 3. Push to `main` (or run the **Deploy Retro Board to GitHub Pages** workflow). The workflow creates `firebase-config.js` only in the build artifact and deploys it to Pages.
 
-`RETRO_TEAM_ID` is no longer required. If you leave the existing repository variable in place, the app offers it as a convenient link to the original single-room board so its history stays easy to reach.
+`RETRO_TEAM_ID` is no longer required. You may leave the existing repository variable in place for compatibility with the original room; enter that room code from the Rooms page whenever you need its history.
 
 The values in a Firebase web configuration are visible to site visitors by design. Do not put an Admin SDK service-account key, a private key, an API token, or any other server secret in `FIREBASE_CONFIG_JSON`.
 
