@@ -36,6 +36,7 @@
     discussions: {},
     listenerCleanups: [],
     membershipCleanups: [],
+    requestCleanups: [],
     cardsCleanup: [],
     error: "",
     message: "",
@@ -310,7 +311,7 @@
   async function withdrawRequest() { try { await requestRef(state.user.uid).remove(); setFeedback("Request withdrawn."); } catch (error) { setFeedback("", friendlyError(error)); } render(); }
 
   function resetRoomState() {
-    detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.cardsCleanup);
+    detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.requestCleanups); detach(state.cardsCleanup);
     state.member = null; state.team = null; state.retros = {}; state.members = {}; state.requests = {};
     state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.discussionFilter = "all"; state.ownCards = {}; state.allCards = {}; state.discussions = {};
   }
@@ -476,7 +477,28 @@
       else { state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null; state.view = "archive"; detach(state.cardsCleanup); render(); }
     }));
     state.listenerCleanups.push(listen(ref("members"), (snap) => { state.members = snap.val() || {}; render(); }));
-    if (isAdmin()) state.listenerCleanups.push(listen(requestRef(), (snap) => { state.requests = snap.val() || {}; render(); }));
+    watchAccessRequests();
+  }
+
+  function watchAccessRequests() {
+    detach(state.requestCleanups);
+    if (!isAdmin()) return;
+    state.requests = {};
+    const requestsReference = requestRef();
+    const onAdded = (snap) => { state.requests = { ...state.requests, [snap.key]: snap.val() }; render(); };
+    const onChanged = (snap) => { state.requests = { ...state.requests, [snap.key]: snap.val() }; render(); };
+    const onRemoved = (snap) => {
+      const { [snap.key]: removed, ...remaining } = state.requests;
+      state.requests = remaining;
+      render();
+    };
+    const onError = (error) => { state.error = friendlyError(error); render(); };
+    requestsReference.on("child_added", onAdded, onError);
+    requestsReference.on("child_changed", onChanged, onError);
+    requestsReference.on("child_removed", onRemoved, onError);
+    state.requestCleanups.push(() => requestsReference.off("child_added", onAdded));
+    state.requestCleanups.push(() => requestsReference.off("child_changed", onChanged));
+    state.requestCleanups.push(() => requestsReference.off("child_removed", onRemoved));
   }
 
   function watchMembership() {
@@ -486,7 +508,7 @@
       const wasMember = Boolean(state.member); const wasAdmin = isAdmin(); state.member = snap.val();
       if (state.member && !wasMember) attachMemberData();
       if (state.member && !wasAdmin && isAdmin()) attachMemberData();
-      if (!state.member && wasMember) { detach(state.listenerCleanups); detach(state.cardsCleanup); state.retros = {}; }
+      if (!state.member && wasMember) { detach(state.listenerCleanups); detach(state.requestCleanups); detach(state.cardsCleanup); state.retros = {}; state.requests = {}; }
       render();
     }, (error) => { state.member = null; state.error = friendlyError(error); render(); });
     state.membershipCleanups.push(() => memberReference.off("value"));
