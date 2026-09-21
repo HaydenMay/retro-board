@@ -37,6 +37,17 @@
               }
             }
           }
+        },
+        "discussions": {
+          "$retroId": {
+            ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'revealed'",
+            "$authorId": {
+              "$cardId": {
+                ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' && root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'revealed'",
+                ".validate": "!newData.exists() || (newData.hasChildren(['discussed', 'updatedAt', 'updatedBy']) && newData.child('discussed').val() === true && newData.child('updatedAt').isNumber() && newData.child('updatedBy').val() === auth.uid)"
+              }
+            }
+          }
         }
       }
     },

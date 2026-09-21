@@ -30,8 +30,10 @@
     selectedRetroId: null,
     view: "archive",
     archiveSearch: "",
+    discussionFilter: "all",
     ownCards: {},
     allCards: {},
+    discussions: {},
     listenerCleanups: [],
     membershipCleanups: [],
     cardsCleanup: [],
@@ -123,6 +125,10 @@
     return activeRetro()?.status === "revealed" ? state.allCards : state.ownCards;
   }
 
+  function isDiscussed(card) {
+    return Boolean(state.discussions[card.authorId]?.[card.id]?.discussed);
+  }
+
   function flattenCards(tree) {
     return Object.entries(tree || {}).flatMap(([authorId, cards]) => Object.entries(cards || {}).map(([id, card]) => ({ id, authorId, ...card })))
       .filter((card) => COLUMNS.some((column) => column.id === card.column))
@@ -203,7 +209,7 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions">${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
+        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing.</strong> Teammates’ cards stay hidden until you reveal the board.</p></aside>` : ""}
@@ -242,13 +248,20 @@
 
   function columnMarkup(column) {
     const cards = flattenCards(currentCards()).filter((card) => card.column === column.id);
-    return `<article class="column"><div class="column-head"><h2 class="column-title">${column.title}</h2><span class="card-count">${cards.length}</span></div><div class="cards">${cards.length ? cards.map((card) => cardMarkup(card, column)).join("") : `<p class="empty-column">Nothing here yet.</p>`}</div><button class="button add-card" data-action="add-card" data-column="${column.id}">+ Add card</button></article>`;
+    const discussed = cards.filter(isDiscussed).length;
+    const visibleCards = state.discussionFilter === "undiscussed" ? cards.filter((card) => !isDiscussed(card)) : cards;
+    const countLabel = activeRetro()?.status === "revealed" ? `${cards.length} cards · ${discussed} discussed` : `${cards.length} ${cards.length === 1 ? "card" : "cards"}`;
+    const emptyMessage = cards.length && state.discussionFilter === "undiscussed" ? "Everything here has been discussed." : "Nothing here yet.";
+    return `<article class="column"><div class="column-head"><h2 class="column-title">${column.title}</h2><span class="card-count">${countLabel}</span></div><div class="cards">${visibleCards.length ? visibleCards.map((card) => cardMarkup(card, column)).join("") : `<p class="empty-column">${emptyMessage}</p>`}</div><button class="button add-card" data-action="add-card" data-column="${column.id}">+ Add card</button></article>`;
   }
 
   function cardMarkup(card, column) {
     const own = card.authorId === state.user.uid;
     const owner = own ? "You" : nameFromMember(state.members[card.authorId]);
-    return `<article class="retro-card ${column.cardClass}"><p class="card-text">${esc(card.text)}</p><footer class="card-footer"><span class="card-owner">${esc(owner)}</span>${own ? `<span class="card-menu"><button data-action="edit-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Edit</button><button data-action="delete-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Delete</button></span>` : ""}</footer></article>`;
+    const discussed = isDiscussed(card);
+    const revealComplete = activeRetro()?.status === "revealed";
+    const discussionControl = revealComplete && isAdmin() ? `<button class="discussion-toggle ${discussed ? "complete" : ""}" data-action="toggle-discussed" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}" aria-label="${discussed ? "Mark as not discussed" : "Mark as discussed"}" title="${discussed ? "Discussed" : "Mark discussed"}">✓</button>` : discussed ? `<span class="discussion-indicator" title="Discussed">✓</span>` : "";
+    return `<article class="retro-card ${column.cardClass} ${discussed ? "discussed" : ""}">${discussionControl}<p class="card-text">${esc(card.text)}</p><footer class="card-footer"><span class="card-owner">${esc(owner)}</span>${own ? `<span class="card-menu"><button data-action="edit-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Edit</button><button data-action="delete-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Delete</button></span>` : ""}</footer></article>`;
   }
 
   function adminAccessMarkup() {
@@ -299,7 +312,7 @@
   function resetRoomState() {
     detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.cardsCleanup);
     state.member = null; state.team = null; state.retros = {}; state.members = {}; state.requests = {};
-    state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.ownCards = {}; state.allCards = {};
+    state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.discussionFilter = "all"; state.ownCards = {}; state.allCards = {}; state.discussions = {};
   }
 
   function updateRoomUrl(room, replace = false) {
@@ -387,6 +400,16 @@
   async function deleteCard(authorId, cardId) { if (!confirm("Delete this card?")) return; try { await ref(`cards/${state.selectedRetroId}/${authorId}/${cardId}`).remove(); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
 
   async function reveal() { if (!confirm("Reveal all responses to the team? This cannot be undone.")) return; try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
+
+  async function toggleDiscussed(authorId, cardId) {
+    if (!isAdmin() || activeRetro()?.status !== "revealed") return;
+    const path = `discussions/${state.selectedRetroId}/${authorId}/${cardId}`;
+    const discussed = Boolean(state.discussions[authorId]?.[cardId]?.discussed);
+    try {
+      if (discussed) await ref(path).remove();
+      else await ref(path).set({ discussed: true, updatedAt: Date.now(), updatedBy: state.user.uid });
+    } catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
   function openRetroDialog() { document.querySelector("#retro-title").value = ""; retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
   async function createRetro() {
     const title = document.querySelector("#retro-title").value.trim(); if (!title) return;
@@ -412,6 +435,7 @@
 
   function openRetro(id, replace = false) {
     if (!state.retros[id] && id !== state.selectedRetroId) return;
+    if (id !== state.selectedRetroId) state.discussionFilter = "all";
     state.selectedRetroId = id;
     state.view = "board";
     setHash(`#retro=${encodeURIComponent(id)}`, replace);
@@ -432,10 +456,13 @@
   }
 
   function attachCards() {
-    detach(state.cardsCleanup); state.ownCards = {}; state.allCards = {};
+    detach(state.cardsCleanup); state.ownCards = {}; state.allCards = {}; state.discussions = {};
     const retro = activeRetro(); if (!retro || !state.user) { render(); return; }
     state.cardsCleanup.push(listen(ref(`cards/${state.selectedRetroId}/${state.user.uid}`), (snap) => { state.ownCards = { [state.user.uid]: snap.val() || {} }; render(); }));
-    if (retro.status === "revealed") state.cardsCleanup.push(listen(ref(`cards/${state.selectedRetroId}`), (snap) => { state.allCards = snap.val() || {}; render(); }));
+    if (retro.status === "revealed") {
+      state.cardsCleanup.push(listen(ref(`cards/${state.selectedRetroId}`), (snap) => { state.allCards = snap.val() || {}; render(); }));
+      state.cardsCleanup.push(listen(ref(`discussions/${state.selectedRetroId}`), (snap) => { state.discussions = snap.val() || {}; render(); }));
+    }
     render();
   }
 
@@ -488,6 +515,9 @@
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
     if (action === "reveal") reveal();
+    if (action === "toggle-discussed") toggleDiscussed(authorId, cardId);
+    if (action === "show-all") { state.discussionFilter = "all"; render(); }
+    if (action === "show-undiscussed") { state.discussionFilter = "undiscussed"; render(); }
     if (action === "new-retro") openRetroDialog();
     if (action === "open-retro") openRetro(button.dataset.retroId);
     if (action === "archive") openArchive();

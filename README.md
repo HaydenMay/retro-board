@@ -13,6 +13,7 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 - Add, edit, and delete only your own cards
 - Admin-only reveal and new-retro creation
 - Realtime card updates plus a searchable Retro Archive with stable IDs and shareable direct links
+- Admin discussion checkmarks and an Undiscussed focus view after a retro is revealed
 - Responsive dark interface with no build step or paid dependency
 
 ## Required one-time setup
@@ -78,6 +79,7 @@ teams/<teamId>
   members/<uid>        # approved members and admin role
   retros/<retroId>     # title + hidden/revealed state
   cards/<retroId>/<uid>/<cardId>
+  discussions/<retroId>/<cardAuthorUid>/<cardId>  # admin-managed, revealed-only checkmarks
 
 accessRequests/<teamId>/<uid>
 ```
@@ -90,6 +92,7 @@ Anonymous Authentication gives each browser a real Firebase UID that persists lo
 - The rules also block direct database reads of other people’s hidden card paths.
 - Only an existing admin can reveal a retro, create retros, edit room metadata, approve people, or assign admin roles.
 - Members can only write below their own UID card path.
+- Only room admins can mark a revealed card as discussed; every member can see that marker after reveal.
 - Members may remove only their own membership record to leave a room; admins can remove other members.
 - Anonymous auth is a lightweight identity, not corporate SSO. The approval queue is intentionally included so a visitor cannot simply self-enroll as a member. For stricter corporate identity, switch Firebase Auth to Google or email sign-in and adapt the onboarding rules.
 

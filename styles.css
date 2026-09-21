@@ -57,6 +57,10 @@ textarea { padding: 12px; line-height: 1.5; resize: vertical; }
 select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(125,169,255,.14); }
 .toolbar-actions, .dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .toolbar-actions .button { min-width: max-content; white-space: nowrap; }
+.discussion-filter { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: #151a26; }
+.filter-button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 750; }
+.filter-button:hover { color: var(--ink); background: #242d40; }
+.filter-button.selected { background: #314a79; color: #eef4ff; }
 .button { min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); color: var(--ink); font-weight: 700; font-size: 14px; }
 .button:hover { border-color: #53637e; background: #293249; }
 .button.primary { border-color: #719cf0; background: var(--blue-strong); color: #fff; }
@@ -78,7 +82,13 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shado
 .retro-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--blue); }
 .retro-card.improve::before { background: var(--amber); }
 .retro-card.action::before { background: var(--green); }
-.card-text { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: 14px; }
+.retro-card.discussed { border-color: #3f735b; background: #1d2d2b; }
+.discussion-toggle, .discussion-indicator { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; font-size: 14px; font-weight: 900; line-height: 1; }
+.discussion-toggle { border: 1px solid #56647e; background: #202839; color: #9ca9c0; }
+.discussion-toggle:hover { border-color: #77d9ae; color: #c5f8dc; background: #263b35; }
+.discussion-toggle.complete, .discussion-indicator { border: 1px solid #58b985; background: #214a39; color: #b9f3d5; }
+.discussion-toggle.complete:hover { border-color: #a1e7c3; background: #285843; }
+.card-text { margin: 0 34px 14px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: 14px; }
 .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
 .card-owner { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-menu { display: flex; gap: 6px; }
