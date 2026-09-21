@@ -512,8 +512,16 @@
     }, 150);
   });
   cardText.addEventListener("input", () => { cardCount.textContent = cardText.value.length; });
-  cardForm.addEventListener("submit", (event) => { event.preventDefault(); saveCard(); });
-  retroForm.addEventListener("submit", (event) => { event.preventDefault(); createRetro(); });
+  cardForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (event.submitter?.value === "cancel") { cardDialog.close(); state.editing = null; return; }
+    saveCard();
+  });
+  retroForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (event.submitter?.value === "cancel") { retroDialog.close(); return; }
+    createRetro();
+  });
   window.addEventListener("hashchange", applyRoute);
 
   async function start() {
