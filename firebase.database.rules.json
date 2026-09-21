@@ -14,7 +14,7 @@
           ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists()",
           "$memberId": {
             ".read": "auth != null && (auth.uid === $memberId || root.child('teams').child($teamId).child('members').child(auth.uid).exists())",
-            ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin'",
+            ".write": "auth != null && (root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' || (auth.uid === $memberId && data.exists() && !newData.exists() && data.child('role').val() === 'member'))",
             ".validate": "newData.hasChildren(['name', 'role', 'joinedAt']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && (newData.child('role').val() === 'admin' || newData.child('role').val() === 'member')"
           }
         },

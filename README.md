@@ -28,6 +28,8 @@ You can reuse the Firebase project from Scrum Poker or make a separate project. 
 3. Go to **Realtime Database** and create a database. Start in locked mode; pick the same region you want to keep long-term.
 4. Open **Realtime Database → Rules** and replace the rules with the contents of [`firebase.database.rules.json`](firebase.database.rules.json). Publish them.
 
+Whenever this repository updates `firebase.database.rules.json`, publish the revised file in that same Rules tab. GitHub Pages deploys the website automatically, but Firebase rules are a separate security setting.
+
 You may deploy the rules with the Firebase CLI instead:
 
 ```bash
@@ -88,6 +90,7 @@ Anonymous Authentication gives each browser a real Firebase UID that persists lo
 - The rules also block direct database reads of other people’s hidden card paths.
 - Only an existing admin can reveal a retro, create retros, edit room metadata, approve people, or assign admin roles.
 - Members can only write below their own UID card path.
+- Members may remove only their own membership record to leave a room; admins can remove other members.
 - Anonymous auth is a lightweight identity, not corporate SSO. The approval queue is intentionally included so a visitor cannot simply self-enroll as a member. For stricter corporate identity, switch Firebase Auth to Google or email sign-in and adapt the onboarding rules.
 
 ## Repository files

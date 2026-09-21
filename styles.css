@@ -103,6 +103,7 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shado
 .request:last-child { border-bottom: 0; }
 .request-name { font-weight: 700; }.request-date { color: var(--faint); font-size: 12px; }
 .request-heading { margin: 24px 0 8px; font-size: 17px; }.role-label { color: #aef0ce; font-size: 12px; font-weight: 800; }
+.member-actions { display: flex; gap: 7px; }.leave-link { color: #ffb5bd; }.leave-link:hover { color: #ffd0d5; }
 .room-code { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }.room-code code { padding: 3px 7px; border: 1px solid #415070; border-radius: 6px; color: #c7d8fb; background: rgba(14,18,28,.55); font-weight: 750; letter-spacing: .08em; }
 .archive-hero { align-items: center; }
 .archive-new { align-self: center; white-space: nowrap; }

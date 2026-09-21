@@ -201,7 +201,7 @@
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
-        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="rooms">Rooms</button></div>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span>${!isAdmin() ? `<button class="plain-button leave-link" data-action="leave-room">Leave room</button>` : ""}<button class="plain-button" data-action="rooms">Rooms</button></div>
       </header>
       <section class="hero">
         <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>${esc(retro.title || "Sprint Retro")}</h1><p class="subtitle">A focused space to reflect together, then turn the conversation into action.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
@@ -228,7 +228,7 @@
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
-        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="rooms">Rooms</button></div>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span>${!isAdmin() ? `<button class="plain-button leave-link" data-action="leave-room">Leave room</button>` : ""}<button class="plain-button" data-action="rooms">Rooms</button></div>
       </header>
       <section class="hero archive-hero">
         <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>Retro archive</h1><p class="subtitle">Every retrospective stays here. Open a board to continue it, revisit its actions, or share its exact ID with the team.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
@@ -260,7 +260,7 @@
   function adminAccessMarkup() {
     const requests = Object.entries(state.requests).sort(([, a], [, b]) => (a.requestedAt || 0) - (b.requestedAt || 0));
     const members = Object.entries(state.members).sort(([, a], [, b]) => a.name.localeCompare(b.name));
-    return `<section class="admin-requests"><p class="eyebrow">ADMIN ACCESS</p><h2>Room members</h2><p class="muted">Promote at least one trusted teammate so the room is never dependent on a single browser identity.</p>${members.map(([uid, member]) => `<div class="request"><span><span class="request-name">${esc(member.name || "Unnamed teammate")}</span><span class="request-date"> · ${member.role === "admin" ? "Admin" : "Member"}</span></span>${member.role === "admin" ? `<span class="role-label">Admin</span>` : `<button class="button small" data-action="make-admin" data-uid="${esc(uid)}">Make admin</button>`}</div>`).join("")}<h2 class="request-heading">Access requests</h2>${requests.length ? requests.map(([uid, request]) => `<div class="request"><span><span class="request-name">${esc(request.name || "Unnamed teammate")}</span><span class="request-date"> · ${dateLabel(request.requestedAt)}</span></span><button class="button small" data-action="approve" data-uid="${esc(uid)}">Approve</button></div>`).join("") : `<p class="muted">No pending access requests.</p>`}</section>`;
+    return `<section class="admin-requests"><p class="eyebrow">ADMIN ACCESS</p><h2>Room members</h2><p class="muted">Promote at least one trusted teammate so the room is never dependent on a single browser identity.</p>${members.map(([uid, member]) => `<div class="request"><span><span class="request-name">${esc(member.name || "Unnamed teammate")}</span><span class="request-date"> · ${member.role === "admin" ? "Admin" : "Member"}</span></span>${uid === state.user.uid ? `<span class="role-label">You</span>` : member.role === "admin" ? `<span class="role-label">Admin</span>` : `<span class="member-actions"><button class="button small" data-action="make-admin" data-uid="${esc(uid)}">Make admin</button><button class="button small danger" data-action="remove-member" data-uid="${esc(uid)}">Remove</button></span>`}</div>`).join("")}<h2 class="request-heading">Access requests</h2>${requests.length ? requests.map(([uid, request]) => `<div class="request"><span><span class="request-name">${esc(request.name || "Unnamed teammate")}</span><span class="request-date"> · ${dateLabel(request.requestedAt)}</span></span><button class="button small" data-action="approve" data-uid="${esc(uid)}">Approve</button></div>`).join("") : `<p class="muted">No pending access requests.</p>`}</section>`;
   }
 
   function readName(inputId = "display-name") {
@@ -288,6 +288,14 @@
     const member = state.members[uid]; if (!member) return;
     if (!confirm(`Make ${member.name} an admin for this room?`)) return;
     try { await ref(`members/${uid}`).update({ role: "admin" }); setFeedback(`${member.name} is now an admin.`); }
+    catch (error) { setFeedback("", friendlyError(error)); }
+    render();
+  }
+
+  async function removeMember(uid) {
+    const member = state.members[uid]; if (!member || uid === state.user.uid) return;
+    if (!confirm(`Remove ${member.name} from this room? They can request access again later.`)) return;
+    try { await ref(`members/${uid}`).remove(); setFeedback(`${member.name} was removed from the room.`); }
     catch (error) { setFeedback("", friendlyError(error)); }
     render();
   }
@@ -339,6 +347,15 @@
 
   function openRooms() {
     resetRoomState(); state.teamId = ""; localStorage.removeItem(ROOM_STORAGE_KEY); updateRoomUrl(""); render();
+  }
+
+  async function leaveRoom() {
+    if (isAdmin()) return;
+    if (!confirm("Leave this room? You will need to request access again to return.")) return;
+    try {
+      await ref(`members/${state.user.uid}`).remove();
+      openRooms();
+    } catch (error) { setFeedback("", friendlyError(error)); render(); }
   }
 
   async function copyRoomLink() {
@@ -472,6 +489,7 @@
     if (action === "withdraw-request") withdrawRequest();
     if (action === "approve") approve(uid);
     if (action === "make-admin") makeAdmin(uid);
+    if (action === "remove-member") removeMember(uid);
     if (action === "add-card") openCard(column);
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
@@ -480,6 +498,7 @@
     if (action === "open-retro") openRetro(button.dataset.retroId);
     if (action === "archive") openArchive();
     if (action === "rooms") openRooms();
+    if (action === "leave-room") leaveRoom();
     if (action === "copy-room") copyRoomLink();
   });
   app.addEventListener("change", (event) => {
