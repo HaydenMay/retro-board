@@ -47,6 +47,7 @@
   let db;
   let auth;
   let archiveSearchTimer;
+  let feedbackTimer;
 
   function validConfig() {
     return config && config.apiKey && config.apiKey !== "YOUR_API_KEY" && config.databaseURL;
@@ -105,7 +106,17 @@
 
   function isAdmin() { return state.member?.role === "admin"; }
   function activeRetro() { return state.retros[state.selectedRetroId] || null; }
-  function setFeedback(message = "", error = "") { state.message = message; state.error = error; }
+  function clearMessage() { clearTimeout(feedbackTimer); state.message = ""; }
+  function setFeedback(message = "", error = "") {
+    clearMessage();
+    state.message = message;
+    state.error = error;
+    if (message) {
+      feedbackTimer = setTimeout(() => {
+        if (state.message === message) { state.message = ""; render(); }
+      }, 4500);
+    }
+  }
 
   function ref(path = "") { return db.ref(`teams/${state.teamId}${path ? `/${path}` : ""}`); }
   function requestRef(path = "") { return db.ref(`accessRequests/${state.teamId}${path ? `/${path}` : ""}`); }
@@ -153,6 +164,10 @@
       app.innerHTML = accessScreen();
       return;
     }
+    if (state.view === "rooms") {
+      app.innerHTML = roomScreen();
+      return;
+    }
     app.innerHTML = state.view === "board" && activeRetro() ? boardScreen() : archiveScreen();
   }
 
@@ -187,7 +202,7 @@
       <h1>${request ? "Access requested" : "Join the conversation"}</h1>
       <p>${request ? "Your request is waiting for an admin. This browser will remember your identity, so you can safely come back later." : "Enter the name your teammates know you by. An admin approves new people before they can see or add retrospective cards."}</p>
       <label>Your display name<input id="display-name" maxlength="60" value="${esc(defaultName)}" placeholder="e.g. Alex Rivera" ${request ? "disabled" : ""} /></label>
-      <div class="stack">${request ? `<button class="button ghost full" data-action="withdraw-request">Withdraw request</button>` : `<button class="button primary full" data-action="request-access">Request access</button>`}<button class="button ghost full" data-action="rooms">Back to rooms</button></div>
+      <div class="stack">${request ? `<button class="button ghost full" data-action="withdraw-request">Withdraw request</button>` : `<button class="button primary full" data-action="request-access">Request access</button>`}<button class="button ghost full" data-action="room-lobby">Back to rooms</button></div>
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       ${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
       <p class="muted">Your identity is anonymous to Firebase, but your chosen display name is visible to approved teammates after cards are revealed.</p>
@@ -241,6 +256,24 @@
     </div>`;
   }
 
+  function roomScreen() {
+    const requestCount = Object.keys(state.requests).length;
+    const pendingCopy = requestCount ? `${requestCount} pending access ${requestCount === 1 ? "request" : "requests"}` : "No pending access requests";
+    return `<div class="shell">
+      <header class="topbar">
+        <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span>${!isAdmin() ? `<button class="plain-button leave-link" data-action="leave-room">Leave room</button>` : ""}<button class="plain-button" data-action="room-lobby">Switch rooms</button></div>
+      </header>
+      <section class="hero room-hero">
+        <div><p class="eyebrow">ROOM</p><h1>${esc(state.team?.name || "Your room")}</h1><p class="subtitle">Manage the people who can take part, then return to your saved retros.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
+        ${isAdmin() ? `<div class="status-box"><div class="status-line"><span class="status-dot ${requestCount ? "" : "revealed"}"></span>${pendingCopy}</div><p class="status-detail">${requestCount ? "Approve requests below to add teammates." : "New requests will appear here automatically."}</p></div>` : ""}
+      </section>
+      <section class="room-actions"><button class="button primary" data-action="archive">Open retro archive</button><button class="button ghost" data-action="room-lobby">Switch rooms</button></section>
+      ${isAdmin() ? adminAccessMarkup() : `<section class="admin-access"><h2>Room access</h2><p>Admins manage access requests and room members here.</p></section>`}
+      ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
+    </div>`;
+  }
+
   function retroListItem(id, retro) {
     const revealed = retro.status === "revealed";
     const creator = retro.createdBy ? nameFromMember(state.members[retro.createdBy]) : "Team";
@@ -287,7 +320,7 @@
 
   async function approve(uid) {
     const request = state.requests[uid]; if (!request) return;
-    try { await ref(`members/${uid}`).set({ name: request.name || "Teammate", role: "member", joinedAt: Date.now() }); await requestRef(uid).remove(); setFeedback(`${request.name || "Teammate"} can now join the board.`); }
+    try { await ref(`members/${uid}`).set({ name: request.name || "Teammate", role: "member", joinedAt: Date.now() }); await requestRef(uid).remove(); setFeedback(`${request.name || "Teammate"} can now join this room.`); }
     catch (error) { setFeedback("", friendlyError(error)); }
     render();
   }
@@ -327,6 +360,7 @@
   function activateRoom(room, replace = false) {
     const normalized = normalizeRoom(room);
     if (!normalized) { setFeedback("", "Enter a valid room code."); render(); return; }
+    clearMessage();
     resetRoomState();
     state.teamId = normalized;
     localStorage.setItem(ROOM_STORAGE_KEY, normalized);
@@ -353,7 +387,17 @@
     activateRoom(code);
   }
 
-  function openRooms() {
+  function openRooms(replace = false) {
+    if (!state.member) { openRoomLobby(); return; }
+    clearMessage();
+    detach(state.cardsCleanup);
+    state.view = "rooms";
+    setHash("#rooms", replace);
+    render();
+  }
+
+  function openRoomLobby() {
+    clearMessage();
     resetRoomState(); state.teamId = ""; localStorage.removeItem(ROOM_STORAGE_KEY); updateRoomUrl(""); render();
   }
 
@@ -362,7 +406,7 @@
     if (!confirm("Leave this room? You will need to request access again to return.")) return;
     try {
       await ref(`members/${state.user.uid}`).remove();
-      openRooms();
+      openRoomLobby();
     } catch (error) { setFeedback("", friendlyError(error)); render(); }
   }
 
@@ -436,6 +480,7 @@
 
   function openRetro(id, replace = false) {
     if (!state.retros[id] && id !== state.selectedRetroId) return;
+    clearMessage();
     if (id !== state.selectedRetroId) state.discussionFilter = "all";
     state.selectedRetroId = id;
     state.view = "board";
@@ -444,6 +489,7 @@
   }
 
   function openArchive(replace = false) {
+    clearMessage();
     state.view = "archive";
     detach(state.cardsCleanup);
     setHash("#retros", replace);
@@ -451,6 +497,7 @@
   }
 
   function applyRoute() {
+    if (window.location.hash === "#rooms") { openRooms(true); return; }
     const id = routeRetroId();
     if (id && state.retros[id]) openRetro(id, true);
     else openArchive(true);
@@ -473,7 +520,8 @@
     state.listenerCleanups.push(listen(ref("retros"), (snap) => {
       state.retros = snap.val() || {};
       const routeId = routeRetroId();
-      if (routeId && state.retros[routeId]) { state.selectedRetroId = routeId; state.view = "board"; attachCards(); }
+      if (window.location.hash === "#rooms") { state.view = "rooms"; detach(state.cardsCleanup); render(); }
+      else if (routeId && state.retros[routeId]) { state.selectedRetroId = routeId; state.view = "board"; attachCards(); }
       else { state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null; state.view = "archive"; detach(state.cardsCleanup); render(); }
     }));
     state.listenerCleanups.push(listen(ref("members"), (snap) => { state.members = snap.val() || {}; render(); }));
@@ -544,6 +592,7 @@
     if (action === "open-retro") openRetro(button.dataset.retroId);
     if (action === "archive") openArchive();
     if (action === "rooms") openRooms();
+    if (action === "room-lobby") openRoomLobby();
     if (action === "leave-room") leaveRoom();
     if (action === "copy-room") copyRoomLink();
   });
