@@ -182,12 +182,12 @@
   function lobbyScreen() {
     const savedName = localStorage.getItem("retro-board-display-name") || "";
     return `<section class="panel wide lobby-panel">
-      <p class="eyebrow">PRIVATE TEAM RETROS</p>
-      <h1>Choose a retro room</h1>
-      <p>Each room is an independent, retained retrospective space. The person who creates a new room becomes its first admin.</p>
+      <p class="eyebrow">TEAM RETROS</p>
+      <h1>Choose a team room</h1>
+      <p>Create a private room for your team. Your retros and action items stay available between sprints.</p>
       <div class="lobby-grid">
-        <section class="lobby-option"><h2>Start a room</h2><p>Create a new room and receive a shareable six-character code.</p><label>Your display name<input id="start-name" maxlength="60" value="${esc(savedName)}" placeholder="e.g. Alex Rivera" /></label><label>Team name<input id="start-team-name" maxlength="100" placeholder="e.g. Product Team" /></label><button class="button primary full" data-action="start-room">Create room</button></section>
-        <section class="lobby-option"><h2>Join a room</h2><p>Enter the room code someone shared with you.</p><label>Room code<input id="join-room-code" maxlength="32" placeholder="e.g. 7XQ2KM" autocapitalize="characters" /></label><button class="button full" data-action="join-room">Find room</button></section>
+        <section class="lobby-option"><h2>Start a room</h2><p>You’ll get a code to share with your team.</p><label>Your display name<input id="start-name" maxlength="60" value="${esc(savedName)}" placeholder="e.g. Alex Rivera" /></label><label>Team name<input id="start-team-name" maxlength="100" placeholder="e.g. Product Team" /></label><button class="button primary full" data-action="start-room">Create room</button></section>
+        <section class="lobby-option"><h2>Join a room</h2><p>Enter the room code your team shared with you.</p><label>Room code<input id="join-room-code" maxlength="32" placeholder="e.g. 7XQ2KM" autocapitalize="characters" /></label><button class="button full" data-action="join-room">Find room</button></section>
       </div>
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
     </section>`;
@@ -224,7 +224,7 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
+        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span><button class="button" data-action="hide">Hide responses</button>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing.</strong> Teammates’ cards stay hidden until you reveal the board.</p></aside>` : ""}
@@ -443,7 +443,33 @@
   function findCard(authorId, cardId) { return flattenCards(activeRetro()?.status === "revealed" ? state.allCards : state.ownCards).find((card) => card.authorId === authorId && card.id === cardId); }
   async function deleteCard(authorId, cardId) { if (!confirm("Delete this card?")) return; try { await ref(`cards/${state.selectedRetroId}/${authorId}/${cardId}`).remove(); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
 
-  async function reveal() { if (!confirm("Reveal all responses to the team? This cannot be undone.")) return; try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
+  async function reveal() {
+    if (!isAdmin() || activeRetro()?.status !== "hidden") return;
+    if (!confirm("Reveal all responses to the team?")) return;
+    try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); }
+    catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
+
+  async function hideResponses() {
+    const retroId = state.selectedRetroId;
+    const retro = activeRetro();
+    if (!isAdmin() || !retro || retro.status !== "revealed") return;
+    if (!confirm("Hide responses again? Teammates will immediately return to seeing only their own cards.")) return;
+
+    const previousRetro = { ...retro };
+    state.retros[retroId] = { ...retro, status: "hidden" };
+    state.discussionFilter = "all";
+    attachCards();
+
+    try {
+      await ref(`retros/${retroId}`).update({ status: "hidden" });
+    } catch (error) {
+      state.retros[retroId] = previousRetro;
+      if (state.selectedRetroId === retroId) attachCards();
+      setFeedback("", friendlyError(error));
+      render();
+    }
+  }
 
   async function toggleDiscussed(authorId, cardId) {
     if (!isAdmin() || activeRetro()?.status !== "revealed") return;
@@ -584,6 +610,7 @@
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
     if (action === "reveal") reveal();
+    if (action === "hide") hideResponses();
     if (action === "toggle-discussed") toggleDiscussed(authorId, cardId);
     if (action === "show-all") { state.discussionFilter = "all"; render(); }
     if (action === "show-undiscussed") { state.discussionFilter = "undiscussed"; render(); }

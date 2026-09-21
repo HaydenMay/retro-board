@@ -2,7 +2,7 @@
 
 A small, polished retrospective board for one work team. It has a fixed **What Went Well / To Improve / Action Items** layout, live updates, lightweight history, and a proper private-writing phase.
 
-The important privacy property is enforced in Firebase Realtime Database rules: while a retro is hidden, a member’s browser is only allowed to read `cards/<retro>/<their UID>`. Other people’s cards are not merely hidden in the UI—they are not sent to that member at all. When an admin reveals the retro, the rules permit the shared card collection to be read.
+The important privacy property is enforced in Firebase Realtime Database rules: while a retro is hidden, a member’s browser is only allowed to read `cards/<retro>/<their UID>`. Other people’s cards are not merely hidden in the UI—they are not sent to that member at all. When an admin reveals the retro, the rules permit the shared card collection to be read; an admin can hide it again at any time.
 
 ## What it includes
 
@@ -11,7 +11,7 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 - Admin-approved teammate access requests
 - Three fixed retrospective columns
 - Add, edit, and delete only your own cards
-- Admin-only reveal and new-retro creation
+- Admin-only reveal, re-hide, and new-retro creation
 - Realtime card updates plus a searchable Retro Archive with stable IDs and shareable direct links
 - Admin discussion checkmarks and an Undiscussed focus view after a retro is revealed
 - Responsive dark interface with no build step or paid dependency
@@ -40,7 +40,9 @@ firebase use YOUR_PROJECT_ID
 firebase deploy --only database
 ```
 
-The first person to create a room becomes that room’s initial admin. Share its room link or six-character code with teammates; they request access and an admin approves them. Promote at least one trusted teammate to admin from **Room members** so a single browser identity cannot strand the room.
+The first person to create a room becomes that room’s initial admin. Share its room link or six-character code with teammates; they request access and an admin approves them. Approval is stored against that browser’s Firebase anonymous identity, so an approved teammate can return for future retros without asking again. Promote at least one trusted teammate to admin from **Room members** so a single browser identity cannot strand the room.
+
+An approved teammate will need approval again if they clear browser/site data, use a private window or another browser/device, lose their anonymous Firebase identity, are removed by an admin, or choose **Leave room**.
 
 ### 2. Configure GitHub Pages deployment
 
@@ -88,13 +90,23 @@ Anonymous Authentication gives each browser a real Firebase UID that persists lo
 
 ## Security notes
 
-- The frontend never downloads all cards while `status` is `hidden`.
+- The frontend never downloads all cards while `status` is `hidden`. Hiding a revealed retro immediately clears shared cards and discussion markers from the active browser view before the database update finishes.
 - The rules also block direct database reads of other people’s hidden card paths.
-- Only an existing admin can reveal a retro, create retros, edit room metadata, approve people, or assign admin roles.
+- Only an existing admin can reveal or re-hide a retro, create retros, edit room metadata, approve people, or assign admin roles. This is enforced by the database rules, not just the interface.
 - Members can only write below their own UID card path.
 - Only room admins can mark a revealed card as discussed; every member can see that marker after reveal.
 - Members may remove only their own membership record to leave a room; admins can remove other members.
 - Anonymous auth is a lightweight identity, not corporate SSO. The approval queue is intentionally included so a visitor cannot simply self-enroll as a member. For stricter corporate identity, switch Firebase Auth to Google or email sign-in and adapt the onboarding rules.
+
+Hiding a retro restores database access to own-card-only visibility. It cannot retract text someone already copied, saved, or screenshotted while the retro was revealed.
+
+## Quick verification
+
+1. Create a room in one browser and request access from another; approve the request and refresh both browsers to confirm the membership remains approved.
+2. Create a retro, add cards in every column, and confirm each member can edit or delete only their own cards.
+3. While hidden, confirm a member sees only their own cards. Reveal the retro and confirm all approved members see every card and discussion marker live.
+4. Mark cards discussed, use **All** and **Undiscussed**, then choose **Hide responses**. Shared cards and markers should disappear immediately, leaving each member with only their own cards.
+5. Create another retro and confirm earlier retros remain in the archive after refreshing the page.
 
 ## Repository files
 

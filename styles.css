@@ -45,7 +45,7 @@ h2 { margin-bottom: 6px; letter-spacing: -.03em; }
 .status-line { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 4px rgba(243,197,106,.13); }
 .status-dot.revealed { background: var(--green); box-shadow: 0 0 0 4px rgba(117,214,174,.13); }
-.status-detail { margin: 5px 0 0 17px; color: var(--muted); font-size: 12px; }
+.status-detail { margin: 5px 0 0 17px; color: var(--muted); font-size: 13px; }
 
 .toolbar { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 2px 0; }
 .retro-id { margin: -10px 0 0; color: var(--faint); font-size: 13px; }
@@ -76,7 +76,7 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shado
 .column { min-height: 285px; padding: 15px; border: 1px solid var(--border); border-radius: 16px; background: rgba(24,29,42,.86); }
 .column-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .column-title { margin: 0; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; }
-.card-count { color: var(--faint); font-size: 12px; }
+.card-count { color: var(--faint); font-size: 13px; }
 .cards { display: grid; gap: 10px; min-height: 20px; }
 .retro-card { position: relative; padding: 14px; overflow: hidden; border: 1px solid #3b465e; border-radius: 12px; background: #202839; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
 .retro-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--blue); }
@@ -88,8 +88,8 @@ select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shado
 .discussion-toggle:hover { border-color: #77d9ae; color: #c5f8dc; background: #263b35; }
 .discussion-toggle.complete, .discussion-indicator { border: 1px solid #58b985; background: #214a39; color: #b9f3d5; }
 .discussion-toggle.complete:hover { border-color: #a1e7c3; background: #285843; }
-.card-text { margin: 0 34px 14px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: 14px; }
-.card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.card-text { margin: 0 34px 14px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; font-size: 15px; }
+.card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
 .card-owner { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-menu { display: flex; gap: 6px; }
 .card-menu button { padding: 0; border: 0; background: none; color: var(--muted); font-size: 12px; }
