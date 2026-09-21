@@ -46,7 +46,6 @@
 
   let db;
   let auth;
-  let archiveSearchTimer;
   let feedbackTimer;
 
   function validConfig() {
@@ -168,6 +167,7 @@
       app.innerHTML = roomScreen();
       return;
     }
+    if (state.view === "archive" && document.activeElement?.id === "archive-search" && renderArchiveResults()) return;
     app.innerHTML = state.view === "board" && activeRetro() ? boardScreen() : archiveScreen();
   }
 
@@ -235,11 +235,42 @@
     </div>`;
   }
 
-  function archiveScreen() {
+  function archiveData() {
     const retros = Object.entries(state.retros)
       .sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
     const query = state.archiveSearch.trim().toLowerCase();
     const matching = retros.filter(([id, retro]) => !query || `${retro.title || ""} ${retroCode(id, retro)} ${id}`.toLowerCase().includes(query));
+    return { retros, matching, query };
+  }
+
+  function archiveCountLabel(retros, matching, query) {
+    if (query) return `${matching.length} of ${retros.length} ${retros.length === 1 ? "retro" : "retros"}`;
+    return `${retros.length} ${retros.length === 1 ? "retro" : "retros"} saved`;
+  }
+
+  function archiveResultsMarkup(retros, matching) {
+    return matching.length ? matching.map(([id, retro]) => retroListItem(id, retro)).join("") : `<div class="empty-archive"><h2>${retros.length ? "No matching retros" : "No retros yet"}</h2><p>${retros.length ? "Try another title or Retro ID." : isAdmin() ? "Create your first retro to begin." : "An admin will create the first retro soon."}</p>${!retros.length && isAdmin() ? `<button class="button primary" data-action="new-retro">Create first retro</button>` : ""}</div>`;
+  }
+
+  function archiveNoticesMarkup() {
+    return `${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}`;
+  }
+
+  function renderArchiveResults() {
+    if (state.view !== "archive") return false;
+    const count = document.querySelector("#archive-count");
+    const results = document.querySelector("#archive-results");
+    const notices = document.querySelector("#archive-notices");
+    if (!count || !results || !notices) return false;
+    const { retros, matching, query } = archiveData();
+    count.textContent = archiveCountLabel(retros, matching, query);
+    results.innerHTML = archiveResultsMarkup(retros, matching);
+    notices.innerHTML = archiveNoticesMarkup();
+    return true;
+  }
+
+  function archiveScreen() {
+    const { retros, matching, query } = archiveData();
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
@@ -249,25 +280,24 @@
         <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>Retro archive</h1><p class="subtitle">Every retrospective stays here. Open a board to continue it, revisit its actions, or share its exact ID with the team.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
         ${isAdmin() ? `<button class="button primary archive-new" data-action="new-retro">+ New retro</button>` : ""}
       </section>
-      <section class="archive-controls"><label class="search-label">Find a retro<input id="archive-search" value="${esc(state.archiveSearch)}" placeholder="Search title or Retro ID" /></label><p class="archive-count">${retros.length} ${retros.length === 1 ? "retro" : "retros"} saved</p></section>
-      <section class="retro-list">${matching.length ? matching.map(([id, retro]) => retroListItem(id, retro)).join("") : `<div class="empty-archive"><h2>${retros.length ? "No matching retros" : "No retros yet"}</h2><p>${retros.length ? "Try another title or Retro ID." : isAdmin() ? "Create your first retro to begin." : "An admin will create the first retro soon."}</p>${!retros.length && isAdmin() ? `<button class="button primary" data-action="new-retro">Create first retro</button>` : ""}</div>`}</section>
-      ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
+      <section class="archive-controls"><label class="search-label">Find a retro<input id="archive-search" value="${esc(state.archiveSearch)}" placeholder="Search title or Retro ID" /></label><p class="archive-count" id="archive-count">${archiveCountLabel(retros, matching, query)}</p></section>
+      <section class="retro-list" id="archive-results">${archiveResultsMarkup(retros, matching)}</section>
+      <div id="archive-notices">${archiveNoticesMarkup()}</div>
     </div>`;
   }
 
   function roomScreen() {
-    const requestCount = Object.keys(state.requests).length;
-    const pendingCopy = requestCount ? `${requestCount} pending access ${requestCount === 1 ? "request" : "requests"}` : "No pending access requests";
+    const retroCount = Object.keys(state.retros).length;
+    const retroCountLabel = `${retroCount} ${retroCount === 1 ? "retro" : "retros"} saved`;
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
         <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span>${!isAdmin() ? `<button class="plain-button leave-link" data-action="leave-room">Leave room</button>` : ""}<button class="plain-button" data-action="room-lobby">Switch rooms</button></div>
       </header>
       <section class="hero room-hero">
-        <div><p class="eyebrow">ROOM</p><h1>${esc(state.team?.name || "Your room")}</h1><p class="subtitle">Manage the people who can take part, then return to your saved retros.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
-        ${isAdmin() ? `<div class="status-box"><div class="status-line"><span class="status-dot ${requestCount ? "" : "revealed"}"></span>${pendingCopy}</div><p class="status-detail">${requestCount ? "Approve requests below to add teammates." : "New requests will appear here automatically."}</p></div>` : ""}
+        <div><p class="eyebrow">ROOM</p><h1>${esc(state.team?.name || "Your room")}</h1><p class="subtitle">Your team’s private space for retros that stay useful between sprints.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
       </section>
-      <section class="room-actions"><button class="button primary" data-action="archive">Open retro archive</button><button class="button ghost" data-action="room-lobby">Switch rooms</button></section>
+      <button class="archive-destination" data-action="archive" aria-label="Open Retro archive, ${esc(retroCountLabel)}"><span class="archive-destination-copy"><span class="eyebrow">RETROS</span><span class="archive-destination-title">Retro archive</span><span class="archive-destination-description">Open your current and previous retros.</span></span><span class="archive-destination-meta"><span class="archive-destination-count">${esc(retroCountLabel)}</span><span class="archive-destination-open">Open archive →</span></span></button>
       ${isAdmin() ? adminAccessMarkup() : `<section class="admin-access"><h2>Room access</h2><p>Admins manage access requests and room members here.</p></section>`}
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
     </div>`;
@@ -624,19 +654,11 @@
   });
   app.addEventListener("change", (event) => {
     if (event.target.id === "retro-picker") openRetro(event.target.value);
-    if (event.target.id === "archive-search") { state.archiveSearch = event.target.value; render(); }
   });
   app.addEventListener("input", (event) => {
     if (event.target.id !== "archive-search") return;
     state.archiveSearch = event.target.value;
-    window.clearTimeout(archiveSearchTimer);
-    archiveSearchTimer = window.setTimeout(() => {
-      if (state.view !== "archive") return;
-      const cursor = state.archiveSearch.length;
-      render();
-      const input = document.querySelector("#archive-search");
-      input?.focus(); input?.setSelectionRange(cursor, cursor);
-    }, 150);
+    renderArchiveResults();
   });
   cardText.addEventListener("input", () => { cardCount.textContent = cardText.value.length; });
   cardForm.addEventListener("submit", (event) => {
