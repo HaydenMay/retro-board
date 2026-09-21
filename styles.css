@@ -56,6 +56,7 @@ select, input { min-height: 42px; padding: 0 12px; }
 textarea { padding: 12px; line-height: 1.5; resize: vertical; }
 select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(125,169,255,.14); }
 .toolbar-actions, .dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.toolbar-actions .button { min-width: max-content; white-space: nowrap; }
 .button { min-height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); color: var(--ink); font-weight: 700; font-size: 14px; }
 .button:hover { border-color: #53637e; background: #293249; }
 .button.primary { border-color: #719cf0; background: var(--blue-strong); color: #fff; }
