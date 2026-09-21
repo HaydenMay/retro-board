@@ -81,10 +81,6 @@
     return `R-${stamp}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   }
 
-  function defaultRetroTitle() {
-    return `Sprint Retro — ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date())}`;
-  }
-
   function normalizeRoom(value) {
     return String(value || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
   }
@@ -206,7 +202,7 @@
         <div class="status-box"><div class="status-line"><span class="status-dot ${isRevealed ? "revealed" : ""}"></span>${isRevealed ? "Responses revealed" : "Responses hidden"}</div><p class="status-detail">${isRevealed ? "Everyone can now see the board." : "Only you can see your cards."}</p></div>
       </section>
       <section class="toolbar">
-        <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")}</option>`).join("")}</select>
+        <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
         <div class="toolbar-actions">${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
@@ -391,7 +387,7 @@
   async function deleteCard(authorId, cardId) { if (!confirm("Delete this card?")) return; try { await ref(`cards/${state.selectedRetroId}/${authorId}/${cardId}`).remove(); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
 
   async function reveal() { if (!confirm("Reveal all responses to the team? This cannot be undone.")) return; try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
-  function openRetroDialog() { document.querySelector("#retro-title").value = defaultRetroTitle(); retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
+  function openRetroDialog() { document.querySelector("#retro-title").value = ""; retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
   async function createRetro() {
     const title = document.querySelector("#retro-title").value.trim(); if (!title) return;
     const id = `retro-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; const now = Date.now();
