@@ -243,7 +243,7 @@
   function retroListItem(id, retro) {
     const revealed = retro.status === "revealed";
     const creator = retro.createdBy ? nameFromMember(state.members[retro.createdBy]) : "Team";
-    return `<button class="retro-list-item" data-action="open-retro" data-retro-id="${esc(id)}" aria-label="Open ${esc(retro.title || "Untitled retro")}"><span class="retro-list-copy"><span class="retro-list-topline"><span class="retro-state ${revealed ? "revealed" : "hidden"}">${revealed ? "Revealed" : "Private"}</span><code>${esc(retroCode(id, retro))}</code></span><span class="retro-list-title">${esc(retro.title || "Untitled retro")}</span><span class="retro-list-meta">Created ${esc(dateTimeLabel(retro.createdAt))} by ${esc(creator)}</span></span><span class="retro-open-hint">Open →</span></button>`;
+    return `<button class="retro-list-item" data-action="open-retro" data-retro-id="${esc(id)}" aria-label="Open ${esc(retro.title || "Untitled retro")}"><span class="retro-list-copy"><span class="retro-list-topline"><span class="retro-state ${revealed ? "revealed" : "hidden"}">${revealed ? "Revealed" : "Hidden"}</span><code>${esc(retroCode(id, retro))}</code></span><span class="retro-list-title">${esc(retro.title || "Untitled retro")}</span><span class="retro-list-meta">Created ${esc(dateTimeLabel(retro.createdAt))} by ${esc(creator)}</span></span><span class="retro-open-hint">Open →</span></button>`;
   }
 
   function columnMarkup(column) {
