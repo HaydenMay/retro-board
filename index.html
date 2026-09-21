@@ -12,13 +12,13 @@
     <main id="app" aria-live="polite"></main>
 
     <dialog id="card-dialog" class="dialog">
-      <form id="card-form" method="dialog">
+      <form id="card-form">
         <div class="dialog-heading">
           <div>
             <p class="eyebrow" id="card-dialog-kicker">NEW CARD</p>
             <h2 id="card-dialog-title">Add a thought</h2>
           </div>
-          <button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button>
+          <button class="icon-button" type="button" data-dialog-cancel="card" aria-label="Close">×</button>
         </div>
         <label>
           Thought
@@ -26,20 +26,20 @@
         </label>
         <p class="character-count"><span id="card-count">0</span>/1000</p>
         <div class="dialog-actions">
-          <button class="button ghost" value="cancel" formnovalidate>Cancel</button>
-          <button class="button primary" id="save-card" value="default">Save card</button>
+          <button class="button ghost" type="button" data-dialog-cancel="card">Cancel</button>
+          <button class="button primary" id="save-card" type="submit">Save card</button>
         </div>
       </form>
     </dialog>
 
     <dialog id="retro-dialog" class="dialog">
-      <form id="retro-form" method="dialog">
+      <form id="retro-form">
         <div class="dialog-heading">
           <div>
             <p class="eyebrow">NEW RETRO</p>
             <h2>Start a fresh reflection</h2>
           </div>
-          <button class="icon-button" value="cancel" formnovalidate aria-label="Close">×</button>
+          <button class="icon-button" type="button" data-dialog-cancel="retro" aria-label="Close">×</button>
         </div>
         <label>
           Retro title
@@ -47,8 +47,8 @@
         </label>
         <p class="form-note">Use a clear name so the Retro Archive stays useful. A new retro starts hidden.</p>
         <div class="dialog-actions">
-          <button class="button ghost" value="cancel" formnovalidate>Cancel</button>
-          <button class="button primary" id="create-retro" value="default">Create retro</button>
+          <button class="button ghost" type="button" data-dialog-cancel="retro">Cancel</button>
+          <button class="button primary" id="create-retro" type="submit">Create retro</button>
         </div>
       </form>
     </dialog>

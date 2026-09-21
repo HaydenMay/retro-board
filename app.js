@@ -615,14 +615,14 @@
   cardText.addEventListener("input", () => { cardCount.textContent = cardText.value.length; });
   cardForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (event.submitter?.value === "cancel") { cardDialog.close(); state.editing = null; return; }
     saveCard();
   });
   retroForm.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (event.submitter?.value === "cancel") { retroDialog.close(); return; }
     createRetro();
   });
+  document.querySelectorAll('[data-dialog-cancel="card"]').forEach((button) => button.addEventListener("click", () => { cardDialog.close(); state.editing = null; }));
+  document.querySelectorAll('[data-dialog-cancel="retro"]').forEach((button) => button.addEventListener("click", () => retroDialog.close()));
   window.addEventListener("hashchange", applyRoute);
 
   async function start() {
