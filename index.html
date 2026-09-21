@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10131d" />
+    <meta name="description" content="A focused, private team retrospective board." />
+    <title>Retro Board</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="app" aria-live="polite"></main>
+
+    <dialog id="card-dialog" class="dialog">
+      <form id="card-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow" id="card-dialog-kicker">NEW CARD</p>
+            <h2 id="card-dialog-title">Add a thought</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <label>
+          Thought
+          <textarea id="card-text" maxlength="1000" rows="6" required placeholder="Keep it concrete and constructive."></textarea>
+        </label>
+        <p class="character-count"><span id="card-count">0</span>/1000</p>
+        <div class="dialog-actions">
+          <button class="button ghost" value="cancel">Cancel</button>
+          <button class="button primary" id="save-card" value="default">Save card</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="retro-dialog" class="dialog">
+      <form id="retro-form" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">NEW RETRO</p>
+            <h2>Start a fresh reflection</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <label>
+          Retro title
+          <input id="retro-title" maxlength="100" required />
+        </label>
+        <p class="form-note">A new retro starts hidden. Previous retros remain in the history.</p>
+        <div class="dialog-actions">
+          <button class="button ghost" value="cancel">Cancel</button>
+          <button class="button primary" id="create-retro" value="default">Create retro</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Firebase compat builds keep this deliberately dependency-free. -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

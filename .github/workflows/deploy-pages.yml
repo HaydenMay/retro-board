@@ -1,0 +1,48 @@
+name: Deploy Retro Board to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the site
+        uses: actions/checkout@v4
+
+      - name: Create Firebase browser configuration
+        env:
+          FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
+          RETRO_TEAM_ID: ${{ vars.RETRO_TEAM_ID }}
+        run: |
+          if [ -z "$FIREBASE_CONFIG_JSON" ] || [ -z "$RETRO_TEAM_ID" ]; then
+            echo "Set FIREBASE_CONFIG_JSON and RETRO_TEAM_ID before deploying. See README.md."
+            exit 1
+          fi
+          printf 'window.RETRO_FIREBASE_CONFIG = %s;\nwindow.RETRO_TEAM_ID = %s;\n' "$FIREBASE_CONFIG_JSON" "$(jq -Rn --arg value "$RETRO_TEAM_ID" '$value')" > firebase-config.js
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
