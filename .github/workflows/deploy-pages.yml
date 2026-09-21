@@ -29,11 +29,14 @@ jobs:
           FIREBASE_CONFIG_JSON: ${{ secrets.FIREBASE_CONFIG_JSON }}
           RETRO_TEAM_ID: ${{ vars.RETRO_TEAM_ID }}
         run: |
-          if [ -z "$FIREBASE_CONFIG_JSON" ] || [ -z "$RETRO_TEAM_ID" ]; then
+          if [ -z "$FIREBASE_CONFIG_JSON" ]; then
             echo "Firebase configuration is not set; deploying the safe setup screen. See README.md."
             cp firebase-config.example.js firebase-config.js
           else
-            printf 'window.RETRO_FIREBASE_CONFIG = %s;\nwindow.RETRO_TEAM_ID = %s;\n' "$FIREBASE_CONFIG_JSON" "$(jq -Rn --arg value "$RETRO_TEAM_ID" '$value')" > firebase-config.js
+            printf 'window.RETRO_FIREBASE_CONFIG = %s;\n' "$FIREBASE_CONFIG_JSON" > firebase-config.js
+            if [ -n "$RETRO_TEAM_ID" ]; then
+              printf 'window.RETRO_LEGACY_ROOM_ID = %s;\n' "$(jq -Rn --arg value "$RETRO_TEAM_ID" '$value')" >> firebase-config.js
+            fi
           fi
 
       - name: Configure Pages

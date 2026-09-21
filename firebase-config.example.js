@@ -15,6 +15,4 @@ window.RETRO_FIREBASE_CONFIG = {
   appId: "YOUR_WEB_APP_ID"
 };
 
-// Use a short, non-guessable permanent ID, for example "northstar-team-7m3q".
-// This is a routing identifier, not a password. Access is controlled by rules.
-window.RETRO_TEAM_ID = "YOUR_TEAM_ID";
+// No team ID is configured here. People create or join independent rooms in the app.

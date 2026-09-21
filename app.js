@@ -3,7 +3,8 @@
   "use strict";
 
   const config = window.RETRO_FIREBASE_CONFIG;
-  const TEAM_ID = window.RETRO_TEAM_ID;
+  const LEGACY_TEAM_ID = window.RETRO_LEGACY_ROOM_ID || window.RETRO_TEAM_ID;
+  const ROOM_STORAGE_KEY = "retro-board-last-room";
   const app = document.querySelector("#app");
   const cardDialog = document.querySelector("#card-dialog");
   const retroDialog = document.querySelector("#retro-dialog");
@@ -20,6 +21,7 @@
 
   const state = {
     user: null,
+    teamId: "",
     member: null,
     team: null,
     retros: {},
@@ -44,7 +46,7 @@
   let archiveSearchTimer;
 
   function validConfig() {
-    return config && TEAM_ID && TEAM_ID !== "YOUR_TEAM_ID" && config.apiKey && config.apiKey !== "YOUR_API_KEY" && config.databaseURL;
+    return config && config.apiKey && config.apiKey !== "YOUR_API_KEY" && config.databaseURL;
   }
 
   function esc(value) {
@@ -83,12 +85,31 @@
     return `Sprint Retro — ${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date())}`;
   }
 
+  function normalizeRoom(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
+  }
+
+  function roomFromUrl() {
+    return normalizeRoom(new URLSearchParams(window.location.search).get("room"));
+  }
+
+  function roomLabel() {
+    return state.team?.code || state.teamId.toUpperCase();
+  }
+
+  function generateRoomCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let index = 0; index < 6; index += 1) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
   function isAdmin() { return state.member?.role === "admin"; }
   function activeRetro() { return state.retros[state.selectedRetroId] || null; }
   function setFeedback(message = "", error = "") { state.message = message; state.error = error; }
 
-  function ref(path = "") { return db.ref(`teams/${TEAM_ID}${path ? `/${path}` : ""}`); }
-  function requestRef(path = "") { return db.ref(`accessRequests/${TEAM_ID}${path ? `/${path}` : ""}`); }
+  function ref(path = "") { return db.ref(`teams/${state.teamId}${path ? `/${path}` : ""}`); }
+  function requestRef(path = "") { return db.ref(`accessRequests/${state.teamId}${path ? `/${path}` : ""}`); }
 
   function detach(list) { list.splice(0).forEach((cleanup) => cleanup()); }
   function listen(reference, callback, errorCallback) {
@@ -98,7 +119,7 @@
   }
 
   function friendlyError(error) {
-    if (error?.code === "PERMISSION_DENIED") return "You do not have permission for that yet. If this is a new board, create it first; otherwise request access from the team admin.";
+    if (error?.code === "PERMISSION_DENIED") return "That room could not be opened, or you do not have access yet. Check the room code or request access from an admin.";
     return error?.message || "Something went wrong. Please try again.";
   }
 
@@ -121,6 +142,10 @@
       app.innerHTML = loadingScreen("Signing in securely…");
       return;
     }
+    if (!state.teamId) {
+      app.innerHTML = lobbyScreen();
+      return;
+    }
     if (!state.member) {
       app.innerHTML = accessScreen();
       return;
@@ -136,17 +161,32 @@
     return `<section class="panel wide"><p class="eyebrow">CONFIGURATION REQUIRED</p><h1>Connect Retro Board to Firebase</h1><p>This published app does not yet have a Firebase configuration. Follow the setup checklist in <code>README.md</code>, set the <code>FIREBASE_CONFIG_JSON</code> GitHub Actions secret, and redeploy.</p><p class="muted">No credentials were embedded in this public repository.</p></section>`;
   }
 
+  function lobbyScreen() {
+    const savedName = localStorage.getItem("retro-board-display-name") || "";
+    const legacyRoom = LEGACY_TEAM_ID && LEGACY_TEAM_ID !== "YOUR_TEAM_ID" ? normalizeRoom(LEGACY_TEAM_ID) : "";
+    return `<section class="panel wide lobby-panel">
+      <p class="eyebrow">PRIVATE TEAM RETROS</p>
+      <h1>Choose a retro room</h1>
+      <p>Each room is an independent, retained retrospective space. The person who creates a new room becomes its first admin.</p>
+      <div class="lobby-grid">
+        <section class="lobby-option"><h2>Start a room</h2><p>Create a new room and receive a shareable six-character code.</p><label>Your display name<input id="start-name" maxlength="60" value="${esc(savedName)}" placeholder="e.g. Alex Rivera" /></label><label>Team name<input id="start-team-name" maxlength="100" placeholder="e.g. Product Team" /></label><button class="button primary full" data-action="start-room">Create room</button></section>
+        <section class="lobby-option"><h2>Join a room</h2><p>Enter the room code someone shared with you.</p><label>Room code<input id="join-room-code" maxlength="32" placeholder="e.g. 7XQ2KM" autocapitalize="characters" /></label><button class="button full" data-action="join-room">Find room</button></section>
+      </div>
+      ${legacyRoom ? `<p class="legacy-room">Existing board from the earlier single-room setup? <button class="plain-button" data-action="open-legacy-room" data-room="${esc(legacyRoom)}">Open room ${esc(legacyRoom.toUpperCase())}</button></p>` : ""}
+      ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
+      <p class="muted">Keep at least two admins in an important room. Admins can promote trusted teammates from the room’s access section.</p>
+    </section>`;
+  }
+
   function accessScreen() {
     const request = state.requests[state.user.uid];
     const defaultName = request?.name || localStorage.getItem("retro-board-display-name") || "";
     return `<section class="panel">
-      <p class="eyebrow">PRIVATE TEAM RETROS</p>
+      <p class="eyebrow">ROOM ${esc(roomLabel())}</p>
       <h1>${request ? "Access requested" : "Join the conversation"}</h1>
       <p>${request ? "Your request is waiting for an admin. This browser will remember your identity, so you can safely come back later." : "Enter the name your teammates know you by. An admin approves new people before they can see or add retrospective cards."}</p>
       <label>Your display name<input id="display-name" maxlength="60" value="${esc(defaultName)}" placeholder="e.g. Alex Rivera" ${request ? "disabled" : ""} /></label>
-      <div class="stack">
-        ${request ? `<button class="button ghost full" data-action="withdraw-request">Withdraw request</button>` : `<button class="button primary full" data-action="request-access">Request access</button><button class="button ghost full" data-action="create-team">Set up this team (first admin only)</button>`}
-      </div>
+      <div class="stack">${request ? `<button class="button ghost full" data-action="withdraw-request">Withdraw request</button>` : `<button class="button primary full" data-action="request-access">Request access</button>`}<button class="button ghost full" data-action="rooms">Back to rooms</button></div>
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       ${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
       <p class="muted">Your identity is anonymous to Firebase, but your chosen display name is visible to approved teammates after cards are revealed.</p>
@@ -161,10 +201,10 @@
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
-        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="sign-out">Sign out</button></div>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="rooms">Rooms</button></div>
       </header>
       <section class="hero">
-        <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>${esc(retro.title || "Sprint Retro")}</h1><p class="subtitle">A focused space to reflect together, then turn the conversation into action.</p></div>
+        <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>${esc(retro.title || "Sprint Retro")}</h1><p class="subtitle">A focused space to reflect together, then turn the conversation into action.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
         <div class="status-box"><div class="status-line"><span class="status-dot ${isRevealed ? "revealed" : ""}"></span>${isRevealed ? "Responses revealed" : "Responses hidden"}</div><p class="status-detail">${isRevealed ? "Everyone can now see the board." : "Only you can see your cards."}</p></div>
       </section>
       <section class="toolbar">
@@ -174,7 +214,7 @@
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing time.</strong> Your teammates’ cards are not downloaded to your browser until an admin reveals this retro.</p></aside>` : ""}
       <section class="board">${COLUMNS.map((column) => columnMarkup(column)).join("")}</section>
-      ${isAdmin() ? requestsMarkup() : ""}
+      ${isAdmin() ? adminAccessMarkup() : ""}
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       ${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
     </div>`;
@@ -188,10 +228,10 @@
     return `<div class="shell">
       <header class="topbar">
         <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
-        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="sign-out">Sign out</button></div>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="rooms">Rooms</button></div>
       </header>
       <section class="hero archive-hero">
-        <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>Retro archive</h1><p class="subtitle">Every retrospective stays here. Open a board to continue it, revisit its actions, or share its exact ID with the team.</p></div>
+        <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>Retro archive</h1><p class="subtitle">Every retrospective stays here. Open a board to continue it, revisit its actions, or share its exact ID with the team.</p><p class="room-code">Room code <code>${esc(roomLabel())}</code> <button class="plain-button" data-action="copy-room">Copy link</button></p></div>
         ${isAdmin() ? `<button class="button primary archive-new" data-action="new-retro">+ New retro</button>` : ""}
       </section>
       <section class="archive-controls"><label class="search-label">Find a retro<input id="archive-search" value="${esc(state.archiveSearch)}" placeholder="Search title or Retro ID" /></label><p class="archive-count">${retros.length} ${retros.length === 1 ? "retro" : "retros"} saved</p></section>
@@ -217,25 +257,14 @@
     return `<article class="retro-card ${column.cardClass}"><p class="card-text">${esc(card.text)}</p><footer class="card-footer"><span class="card-owner">${esc(owner)}</span>${own ? `<span class="card-menu"><button data-action="edit-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Edit</button><button data-action="delete-card" data-card-id="${esc(card.id)}" data-author-id="${esc(card.authorId)}">Delete</button></span>` : ""}</footer></article>`;
   }
 
-  function requestsMarkup() {
+  function adminAccessMarkup() {
     const requests = Object.entries(state.requests).sort(([, a], [, b]) => (a.requestedAt || 0) - (b.requestedAt || 0));
-    return `<section class="admin-requests"><p class="eyebrow">ADMIN</p><h2>Access requests</h2>${requests.length ? requests.map(([uid, request]) => `<div class="request"><span><span class="request-name">${esc(request.name || "Unnamed teammate")}</span><span class="request-date"> · ${dateLabel(request.requestedAt)}</span></span><button class="button small" data-action="approve" data-uid="${esc(uid)}">Approve</button></div>`).join("") : `<p class="muted">No pending access requests.</p>`}</section>`;
+    const members = Object.entries(state.members).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+    return `<section class="admin-requests"><p class="eyebrow">ADMIN ACCESS</p><h2>Room members</h2><p class="muted">Promote at least one trusted teammate so the room is never dependent on a single browser identity.</p>${members.map(([uid, member]) => `<div class="request"><span><span class="request-name">${esc(member.name || "Unnamed teammate")}</span><span class="request-date"> · ${member.role === "admin" ? "Admin" : "Member"}</span></span>${member.role === "admin" ? `<span class="role-label">Admin</span>` : `<button class="button small" data-action="make-admin" data-uid="${esc(uid)}">Make admin</button>`}</div>`).join("")}<h2 class="request-heading">Access requests</h2>${requests.length ? requests.map(([uid, request]) => `<div class="request"><span><span class="request-name">${esc(request.name || "Unnamed teammate")}</span><span class="request-date"> · ${dateLabel(request.requestedAt)}</span></span><button class="button small" data-action="approve" data-uid="${esc(uid)}">Approve</button></div>`).join("") : `<p class="muted">No pending access requests.</p>`}</section>`;
   }
 
-  async function createTeam() {
-    const name = readName(); if (!name) return;
-    setFeedback(); state.pending = true; render();
-    const now = Date.now();
-    try {
-      await ref().set({ meta: { name: "My Team", createdAt: now, createdBy: state.user.uid, activeRetroId: null }, members: { [state.user.uid]: { name, role: "admin", joinedAt: now } }, retros: {} });
-      localStorage.setItem("retro-board-display-name", name);
-      setFeedback("Team created. You are the admin—create the first retro when you are ready.");
-    } catch (error) { setFeedback("", friendlyError(error)); }
-    state.pending = false; render();
-  }
-
-  function readName() {
-    const input = document.querySelector("#display-name");
+  function readName(inputId = "display-name") {
+    const input = document.querySelector(`#${inputId}`);
     const name = input?.value.trim();
     if (!name) { setFeedback("", "Please enter a display name."); render(); return null; }
     return name.slice(0, 60);
@@ -255,7 +284,70 @@
     render();
   }
 
+  async function makeAdmin(uid) {
+    const member = state.members[uid]; if (!member) return;
+    if (!confirm(`Make ${member.name} an admin for this room?`)) return;
+    try { await ref(`members/${uid}`).update({ role: "admin" }); setFeedback(`${member.name} is now an admin.`); }
+    catch (error) { setFeedback("", friendlyError(error)); }
+    render();
+  }
+
   async function withdrawRequest() { try { await requestRef(state.user.uid).remove(); setFeedback("Request withdrawn."); } catch (error) { setFeedback("", friendlyError(error)); } render(); }
+
+  function resetRoomState() {
+    detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.cardsCleanup);
+    state.member = null; state.team = null; state.retros = {}; state.members = {}; state.requests = {};
+    state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.ownCards = {}; state.allCards = {};
+  }
+
+  function updateRoomUrl(room, replace = false) {
+    const url = new URL(window.location.href);
+    if (room) url.searchParams.set("room", room);
+    else url.searchParams.delete("room");
+    if (!room) url.hash = "";
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+  }
+
+  function activateRoom(room, replace = false) {
+    const normalized = normalizeRoom(room);
+    if (!normalized) { setFeedback("", "Enter a valid room code."); render(); return; }
+    resetRoomState();
+    state.teamId = normalized;
+    localStorage.setItem(ROOM_STORAGE_KEY, normalized);
+    updateRoomUrl(normalized, replace);
+    watchMembership();
+    render();
+  }
+
+  async function startRoom() {
+    const name = readName("start-name"); if (!name) return;
+    const teamName = document.querySelector("#start-team-name")?.value.trim().slice(0, 100) || "My Team";
+    const code = generateRoomCode(); const now = Date.now();
+    setFeedback(); activateRoom(code);
+    try {
+      await ref().set({ meta: { name: teamName, code, createdAt: now, createdBy: state.user.uid, activeRetroId: null }, members: { [state.user.uid]: { name, role: "admin", joinedAt: now } }, retros: {} });
+      localStorage.setItem("retro-board-display-name", name);
+      setFeedback(`Room ${code} created. You are its first admin.`);
+    } catch (error) { setFeedback("", friendlyError(error)); }
+    render();
+  }
+
+  function joinRoom() {
+    const code = document.querySelector("#join-room-code")?.value;
+    activateRoom(code);
+  }
+
+  function openRooms() {
+    resetRoomState(); state.teamId = ""; localStorage.removeItem(ROOM_STORAGE_KEY); updateRoomUrl(""); render();
+  }
+
+  async function copyRoomLink() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", state.teamId); url.hash = "retros";
+    try { await navigator.clipboard.writeText(url.toString()); setFeedback("Room link copied."); }
+    catch (error) { setFeedback("", "Could not copy the link. Copy it from your browser address bar instead."); }
+    render();
+  }
 
   function openCard(column, card = null) {
     state.editing = card ? { ...card } : { column };
@@ -353,8 +445,9 @@
     if (!state.user) return;
     const memberReference = ref(`members/${state.user.uid}`);
     memberReference.on("value", (snap) => {
-      const wasMember = Boolean(state.member); state.member = snap.val();
+      const wasMember = Boolean(state.member); const wasAdmin = isAdmin(); state.member = snap.val();
       if (state.member && !wasMember) attachMemberData();
+      if (state.member && !wasAdmin && isAdmin()) attachMemberData();
       if (!state.member && wasMember) { detach(state.listenerCleanups); detach(state.cardsCleanup); state.retros = {}; }
       render();
     }, (error) => { state.member = null; state.error = friendlyError(error); render(); });
@@ -369,18 +462,16 @@
     state.membershipCleanups.push(() => ownRequest.off("value"));
   }
 
-  async function signOut() {
-    if (!confirm("Sign out? This anonymous identity must be approved again if you return.")) return;
-    detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.cardsCleanup); await auth.signOut(); state.member = null; state.team = null; state.retros = {}; state.members = {}; state.requests = {}; state.selectedRetroId = null; render();
-  }
-
   app.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]"); if (!button) return;
     const { action, column, cardId, authorId, uid } = button.dataset;
     if (action === "request-access") requestAccess();
-    if (action === "create-team") createTeam();
+    if (action === "start-room") startRoom();
+    if (action === "join-room") joinRoom();
+    if (action === "open-legacy-room") activateRoom(button.dataset.room);
     if (action === "withdraw-request") withdrawRequest();
     if (action === "approve") approve(uid);
+    if (action === "make-admin") makeAdmin(uid);
     if (action === "add-card") openCard(column);
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
@@ -388,7 +479,8 @@
     if (action === "new-retro") openRetroDialog();
     if (action === "open-retro") openRetro(button.dataset.retroId);
     if (action === "archive") openArchive();
-    if (action === "sign-out") signOut();
+    if (action === "rooms") openRooms();
+    if (action === "copy-room") copyRoomLink();
   });
   app.addEventListener("change", (event) => {
     if (event.target.id === "retro-picker") openRetro(event.target.value);
@@ -416,9 +508,12 @@
     firebase.initializeApp(config); auth = firebase.auth(); db = firebase.database();
     await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     auth.onAuthStateChanged(async (user) => {
-      detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.cardsCleanup); state.user = user;
+      resetRoomState(); state.user = user;
       if (!user) { render(); try { await auth.signInAnonymously(); } catch (error) { state.error = friendlyError(error); render(); } return; }
-      watchMembership(); render();
+      const remembered = localStorage.getItem(ROOM_STORAGE_KEY);
+      const room = roomFromUrl() || remembered;
+      if (room) activateRoom(room, true);
+      else render();
     });
   }
 

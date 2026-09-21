@@ -7,7 +7,7 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 ## What it includes
 
 - Anonymous Firebase identity with browser-local persistence
-- One durable team; first creator is the admin
+- Independent shareable rooms; the creator of each room is its first admin
 - Admin-approved teammate access requests
 - Three fixed retrospective columns
 - Add, edit, and delete only your own cards
@@ -37,7 +37,7 @@ firebase use YOUR_PROJECT_ID
 firebase deploy --only database
 ```
 
-The first person to use the deployed board should be the intended administrator. They choose **Set up this team** and become the sole initial admin. Everyone else requests access; the admin approves them in the board. Do that before sharing the Pages URL widely.
+The first person to create a room becomes that room’s initial admin. Share its room link or six-character code with teammates; they request access and an admin approves them. Promote at least one trusted teammate to admin from **Room members** so a single browser identity cannot strand the room.
 
 ### 2. Configure GitHub Pages deployment
 
@@ -49,15 +49,16 @@ In the GitHub repository’s **Settings → Secrets and variables → Actions**:
    {"apiKey":"AIza...","authDomain":"your-project.firebaseapp.com","databaseURL":"https://your-project-default-rtdb.firebaseio.com","projectId":"your-project","appId":"1:123:web:abc"}
    ```
 
-2. Add a repository **variable** named `RETRO_TEAM_ID`, such as `engineering-9r7q`. Use a short, non-guessable permanent ID. It is a routing identifier, not a password—Firebase rules control access.
-3. In **Settings → Pages**, set Source to **GitHub Actions**.
-4. Push to `main` (or run the **Deploy Retro Board to GitHub Pages** workflow). The workflow creates `firebase-config.js` only in the build artifact and deploys it to Pages.
+2. In **Settings → Pages**, set Source to **GitHub Actions**.
+3. Push to `main` (or run the **Deploy Retro Board to GitHub Pages** workflow). The workflow creates `firebase-config.js` only in the build artifact and deploys it to Pages.
+
+`RETRO_TEAM_ID` is no longer required. If you leave the existing repository variable in place, the app offers it as a convenient link to the original single-room board so its history stays easy to reach.
 
 The values in a Firebase web configuration are visible to site visitors by design. Do not put an Admin SDK service-account key, a private key, an API token, or any other server secret in `FIREBASE_CONFIG_JSON`.
 
 ### Local development
 
-Copy `firebase-config.example.js` to `firebase-config.js`, fill in your Firebase web config and permanent team ID, then open the project with any static web server. `firebase-config.js` is ignored by Git.
+Copy `firebase-config.example.js` to `firebase-config.js`, fill in your Firebase web config, then open the project with any static web server. `firebase-config.js` is ignored by Git.
 
 For example:
 
@@ -71,7 +72,7 @@ For local development and the deployed Pages URL, add their hostnames under **Au
 
 ```text
 teams/<teamId>
-  meta                 # team title, current retro
+  meta                 # room title, room code, current retro
   members/<uid>        # approved members and admin role
   retros/<retroId>     # title + hidden/revealed state
   cards/<retroId>/<uid>/<cardId>
@@ -85,7 +86,7 @@ Anonymous Authentication gives each browser a real Firebase UID that persists lo
 
 - The frontend never downloads all cards while `status` is `hidden`.
 - The rules also block direct database reads of other people’s hidden card paths.
-- Only an existing admin can reveal a retro, create retros, edit team metadata, approve people, or assign roles.
+- Only an existing admin can reveal a retro, create retros, edit room metadata, approve people, or assign admin roles.
 - Members can only write below their own UID card path.
 - Anonymous auth is a lightweight identity, not corporate SSO. The approval queue is intentionally included so a visitor cannot simply self-enroll as a member. For stricter corporate identity, switch Firebase Auth to Google or email sign-in and adapt the onboarding rules.
 
