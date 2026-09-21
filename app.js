@@ -160,7 +160,7 @@
     const sortedRetros = Object.entries(state.retros).sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
     return `<div class="shell">
       <header class="topbar">
-        <div class="brand"><span class="brand-mark">R</span> Retro Board</div>
+        <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
         <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="sign-out">Sign out</button></div>
       </header>
       <section class="hero">
@@ -169,7 +169,7 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions"><button class="button ghost" data-action="archive">All retros</button>${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal responses</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
+        <div class="toolbar-actions">${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal responses</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing time.</strong> Your teammates’ cards are not downloaded to your browser until an admin reveals this retro.</p></aside>` : ""}
@@ -187,7 +187,7 @@
     const matching = retros.filter(([id, retro]) => !query || `${retro.title || ""} ${retroCode(id, retro)} ${id}`.toLowerCase().includes(query));
     return `<div class="shell">
       <header class="topbar">
-        <div class="brand"><span class="brand-mark">R</span> Retro Board</div>
+        <button class="brand brand-link" data-action="archive" aria-label="Return to Retro Archive"><span class="brand-mark">R</span> Retro Board</button>
         <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="sign-out">Sign out</button></div>
       </header>
       <section class="hero archive-hero">

@@ -26,6 +26,8 @@ button:disabled { cursor: wait; opacity: .62; }
 .shell { display: grid; gap: 24px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
 .brand { display: flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 750; letter-spacing: -.02em; }
+.brand-link { padding: 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.brand-link:hover { color: #c9d9ff; }
 .brand-mark { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #6b8fdc; border-radius: 10px; background: linear-gradient(135deg, #91b8ff, #5279d7); color: #101827; font-weight: 900; }
 .identity { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
 .avatar { display: grid; place-items: center; width: 30px; height: 30px; background: #293653; border: 1px solid #3b4a6b; border-radius: 50%; color: #cbd9fa; font-weight: 700; }
