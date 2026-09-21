@@ -12,7 +12,7 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 - Three fixed retrospective columns
 - Add, edit, and delete only your own cards
 - Admin-only reveal and new-retro creation
-- Realtime card updates and retro history
+- Realtime card updates plus a searchable Retro Archive with stable IDs and shareable direct links
 - Responsive dark interface with no build step or paid dependency
 
 ## Required one-time setup

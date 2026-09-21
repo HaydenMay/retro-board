@@ -26,6 +26,8 @@
     members: {},
     requests: {},
     selectedRetroId: null,
+    view: "archive",
+    archiveSearch: "",
     ownCards: {},
     allCards: {},
     listenerCleanups: [],
@@ -39,6 +41,7 @@
 
   let db;
   let auth;
+  let archiveSearchTimer;
 
   function validConfig() {
     return config && TEAM_ID && TEAM_ID !== "YOUR_TEAM_ID" && config.apiKey && config.apiKey !== "YOUR_API_KEY" && config.databaseURL;
@@ -59,6 +62,21 @@
   function dateLabel(value) {
     if (!value) return "just now";
     return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(value));
+  }
+
+  function dateTimeLabel(value) {
+    if (!value) return "Unknown date";
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  }
+
+  function retroCode(id, retro) {
+    return retro?.code || id;
+  }
+
+  function makeRetroCode() {
+    const date = new Date();
+    const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+    return `R-${stamp}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   }
 
   function defaultRetroTitle() {
@@ -107,7 +125,7 @@
       app.innerHTML = accessScreen();
       return;
     }
-    app.innerHTML = boardScreen();
+    app.innerHTML = state.view === "board" && activeRetro() ? boardScreen() : archiveScreen();
   }
 
   function loadingScreen(text) {
@@ -151,14 +169,41 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions">${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal responses</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
+        <div class="toolbar-actions"><button class="button ghost" data-action="archive">All retros</button>${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal responses</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
+      <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing time.</strong> Your teammates’ cards are not downloaded to your browser until an admin reveals this retro.</p></aside>` : ""}
       <section class="board">${COLUMNS.map((column) => columnMarkup(column)).join("")}</section>
       ${isAdmin() ? requestsMarkup() : ""}
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       ${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
     </div>`;
+  }
+
+  function archiveScreen() {
+    const retros = Object.entries(state.retros)
+      .sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
+    const query = state.archiveSearch.trim().toLowerCase();
+    const matching = retros.filter(([id, retro]) => !query || `${retro.title || ""} ${retroCode(id, retro)} ${id}`.toLowerCase().includes(query));
+    return `<div class="shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">R</span> Retro Board</div>
+        <div class="identity"><span class="avatar">${esc(initials(nameFromMember(state.member)))}</span><span>${esc(nameFromMember(state.member))}${isAdmin() ? " · Admin" : ""}</span><button class="plain-button" data-action="sign-out">Sign out</button></div>
+      </header>
+      <section class="hero archive-hero">
+        <div><p class="eyebrow">${esc(state.team?.name || "YOUR TEAM")}</p><h1>Retro archive</h1><p class="subtitle">Every retrospective stays here. Open a board to continue it, revisit its actions, or share its exact ID with the team.</p></div>
+        ${isAdmin() ? `<button class="button primary archive-new" data-action="new-retro">+ New retro</button>` : ""}
+      </section>
+      <section class="archive-controls"><label class="search-label">Find a retro<input id="archive-search" value="${esc(state.archiveSearch)}" placeholder="Search title or Retro ID" /></label><p class="archive-count">${retros.length} ${retros.length === 1 ? "retro" : "retros"} saved</p></section>
+      <section class="retro-list">${matching.length ? matching.map(([id, retro]) => retroListItem(id, retro)).join("") : `<div class="empty-archive"><h2>${retros.length ? "No matching retros" : "No retros yet"}</h2><p>${retros.length ? "Try another title or Retro ID." : isAdmin() ? "Create your first retro to begin." : "An admin will create the first retro soon."}</p>${!retros.length && isAdmin() ? `<button class="button primary" data-action="new-retro">Create first retro</button>` : ""}</div>`}</section>
+      ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
+    </div>`;
+  }
+
+  function retroListItem(id, retro) {
+    const revealed = retro.status === "revealed";
+    const creator = retro.createdBy ? nameFromMember(state.members[retro.createdBy]) : "Team";
+    return `<article class="retro-list-item"><div class="retro-list-copy"><div class="retro-list-topline"><span class="retro-state ${revealed ? "revealed" : "hidden"}">${revealed ? "Revealed" : "Private"}</span><code>${esc(retroCode(id, retro))}</code></div><h2>${esc(retro.title || "Untitled retro")}</h2><p>Created ${esc(dateTimeLabel(retro.createdAt))} by ${esc(creator)}</p></div><button class="button" data-action="open-retro" data-retro-id="${esc(id)}">Open retro</button></article>`;
   }
 
   function columnMarkup(column) {
@@ -239,12 +284,48 @@
   async function deleteCard(authorId, cardId) { if (!confirm("Delete this card?")) return; try { await ref(`cards/${state.selectedRetroId}/${authorId}/${cardId}`).remove(); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
 
   async function reveal() { if (!confirm("Reveal all responses to the team? This cannot be undone.")) return; try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
-  function openRetro() { document.querySelector("#retro-title").value = defaultRetroTitle(); retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
+  function openRetroDialog() { document.querySelector("#retro-title").value = defaultRetroTitle(); retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
   async function createRetro() {
     const title = document.querySelector("#retro-title").value.trim(); if (!title) return;
     const id = `retro-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; const now = Date.now();
-    try { await ref(`retros/${id}`).set({ title: title.slice(0, 100), status: "hidden", createdAt: now, createdBy: state.user.uid }); await ref("meta").update({ activeRetroId: id }); state.selectedRetroId = id; retroDialog.close(); }
+    const retro = { title: title.slice(0, 100), code: makeRetroCode(), status: "hidden", createdAt: now, createdBy: state.user.uid };
+    try {
+      await ref(`retros/${id}`).set(retro);
+      await ref("meta").update({ activeRetroId: id });
+      state.retros[id] = retro;
+      retroDialog.close(); openRetro(id);
+    }
     catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
+
+  function setHash(value, replace = false) {
+    const url = `${window.location.pathname}${window.location.search}${value}`;
+    window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+  }
+
+  function routeRetroId() {
+    return new URLSearchParams(window.location.hash.replace(/^#/, "")).get("retro");
+  }
+
+  function openRetro(id, replace = false) {
+    if (!state.retros[id] && id !== state.selectedRetroId) return;
+    state.selectedRetroId = id;
+    state.view = "board";
+    setHash(`#retro=${encodeURIComponent(id)}`, replace);
+    attachCards();
+  }
+
+  function openArchive(replace = false) {
+    state.view = "archive";
+    detach(state.cardsCleanup);
+    setHash("#retros", replace);
+    render();
+  }
+
+  function applyRoute() {
+    const id = routeRetroId();
+    if (id && state.retros[id]) openRetro(id, true);
+    else openArchive(true);
   }
 
   function attachCards() {
@@ -257,8 +338,13 @@
 
   function attachMemberData() {
     detach(state.listenerCleanups);
-    state.listenerCleanups.push(listen(ref("meta"), (snap) => { state.team = snap.val() || {}; if (!state.selectedRetroId || !state.retros[state.selectedRetroId]) state.selectedRetroId = state.team.activeRetroId; render(); }));
-    state.listenerCleanups.push(listen(ref("retros"), (snap) => { state.retros = snap.val() || {}; if (!state.selectedRetroId || !state.retros[state.selectedRetroId]) state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null; attachCards(); render(); }));
+    state.listenerCleanups.push(listen(ref("meta"), (snap) => { state.team = snap.val() || {}; render(); }));
+    state.listenerCleanups.push(listen(ref("retros"), (snap) => {
+      state.retros = snap.val() || {};
+      const routeId = routeRetroId();
+      if (routeId && state.retros[routeId]) { state.selectedRetroId = routeId; state.view = "board"; attachCards(); }
+      else { state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null; state.view = "archive"; detach(state.cardsCleanup); render(); }
+    }));
     state.listenerCleanups.push(listen(ref("members"), (snap) => { state.members = snap.val() || {}; render(); }));
     if (isAdmin()) state.listenerCleanups.push(listen(requestRef(), (snap) => { state.requests = snap.val() || {}; render(); }));
   }
@@ -299,13 +385,31 @@
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
     if (action === "reveal") reveal();
-    if (action === "new-retro") openRetro();
+    if (action === "new-retro") openRetroDialog();
+    if (action === "open-retro") openRetro(button.dataset.retroId);
+    if (action === "archive") openArchive();
     if (action === "sign-out") signOut();
   });
-  app.addEventListener("change", (event) => { if (event.target.id === "retro-picker") { state.selectedRetroId = event.target.value; attachCards(); } });
+  app.addEventListener("change", (event) => {
+    if (event.target.id === "retro-picker") openRetro(event.target.value);
+    if (event.target.id === "archive-search") { state.archiveSearch = event.target.value; render(); }
+  });
+  app.addEventListener("input", (event) => {
+    if (event.target.id !== "archive-search") return;
+    state.archiveSearch = event.target.value;
+    window.clearTimeout(archiveSearchTimer);
+    archiveSearchTimer = window.setTimeout(() => {
+      if (state.view !== "archive") return;
+      const cursor = state.archiveSearch.length;
+      render();
+      const input = document.querySelector("#archive-search");
+      input?.focus(); input?.setSelectionRange(cursor, cursor);
+    }, 150);
+  });
   cardText.addEventListener("input", () => { cardCount.textContent = cardText.value.length; });
   cardForm.addEventListener("submit", (event) => { event.preventDefault(); saveCard(); });
   retroForm.addEventListener("submit", (event) => { event.preventDefault(); createRetro(); });
+  window.addEventListener("hashchange", applyRoute);
 
   async function start() {
     if (!validConfig()) { render(); return; }
