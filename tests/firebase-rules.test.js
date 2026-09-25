@@ -33,3 +33,9 @@ test("hidden card reads remain restricted to the author and revealed boards", ()
   assert.match(cards[".read"], /status'\)\.val\(\) === 'revealed'/);
   assert.match(cards.$authorId[".read"], /auth\.uid === \$authorId/);
 });
+
+test("only admins can delete a retro's related data branches", () => {
+  for (const collection of ["cards", "readiness", "discussions"]) {
+    assert.equal(team[collection].$retroId[".write"], `auth != null && ${adminRole} && !newData.exists()`);
+  }
+});

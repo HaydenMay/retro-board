@@ -8,8 +8,10 @@
   const app = document.querySelector("#app");
   const cardDialog = document.querySelector("#card-dialog");
   const retroDialog = document.querySelector("#retro-dialog");
+  const deleteRetroDialog = document.querySelector("#delete-retro-dialog");
   const cardForm = document.querySelector("#card-form");
   const retroForm = document.querySelector("#retro-form");
+  const deleteRetroForm = document.querySelector("#delete-retro-form");
   const cardText = document.querySelector("#card-text");
   const cardCount = document.querySelector("#card-count");
 
@@ -42,7 +44,9 @@
     error: "",
     message: "",
     editing: null,
-    pending: false
+    pending: false,
+    pendingDeleteRetroId: null,
+    deletingRetro: false
   };
 
   let db;
@@ -345,7 +349,7 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span><button class="button" data-action="hide">Hide responses</button>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
+        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span><button class="button" data-action="hide">Hide responses</button>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button><button class="button danger" data-action="delete-retro" data-retro-id="${esc(state.selectedRetroId)}">Delete retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing.</strong> Teammates’ cards stay hidden until you reveal the board.</p></aside>` : ""}
@@ -428,7 +432,8 @@
   function retroListItem(id, retro) {
     const revealed = retro.status === "revealed";
     const creator = retro.createdBy ? nameFromMember(state.members[retro.createdBy]) : "Team";
-    return `<button class="retro-list-item" data-action="open-retro" data-retro-id="${esc(id)}" aria-label="Open ${esc(retro.title || "Untitled retro")}"><span class="retro-list-copy"><span class="retro-list-topline"><span class="retro-state ${revealed ? "revealed" : "hidden"}">${revealed ? "Revealed" : "Hidden"}</span><code>${esc(retroCode(id, retro))}</code></span><span class="retro-list-title">${esc(retro.title || "Untitled retro")}</span><span class="retro-list-meta">Created ${esc(dateTimeLabel(retro.createdAt))} by ${esc(creator)}</span></span><span class="retro-open-hint">Open →</span></button>`;
+    const title = retro.title || "Untitled retro";
+    return `<article class="retro-list-item"><button class="retro-list-open" data-action="open-retro" data-retro-id="${esc(id)}" aria-label="Open ${esc(title)}"><span class="retro-list-copy"><span class="retro-list-topline"><span class="retro-state ${revealed ? "revealed" : "hidden"}">${revealed ? "Revealed" : "Hidden"}</span><code>${esc(retroCode(id, retro))}</code></span><span class="retro-list-title">${esc(title)}</span><span class="retro-list-meta">Created ${esc(dateTimeLabel(retro.createdAt))} by ${esc(creator)}</span></span><span class="retro-open-hint">Open →</span></button>${isAdmin() ? `<button class="button danger small retro-delete" data-action="delete-retro" data-retro-id="${esc(id)}" aria-label="Delete ${esc(title)}">Delete</button>` : ""}</article>`;
   }
 
   function columnMarkup(column) {
@@ -681,6 +686,64 @@
     } catch (error) { setFeedback("", friendlyError(error)); render(); }
   }
   function openRetroDialog() { document.querySelector("#retro-title").value = ""; retroDialog.showModal(); document.querySelector("#retro-title").focus(); }
+  function openDeleteRetroDialog(retroId) {
+    const retro = state.retros[retroId];
+    if (!isAdmin() || !retro) return;
+    state.pendingDeleteRetroId = retroId;
+    document.querySelector("#delete-retro-name").textContent = retro.title || "Untitled retro";
+    const submit = document.querySelector("#confirm-delete-retro");
+    submit.disabled = false;
+    submit.textContent = "Delete retro";
+    document.querySelectorAll('[data-dialog-cancel="delete-retro"]').forEach((button) => { button.disabled = false; });
+    deleteRetroDialog.showModal();
+  }
+
+  async function deleteRetro() {
+    const retroId = state.pendingDeleteRetroId;
+    const retro = state.retros[retroId];
+    if (!isAdmin() || !retroId || !retro || state.deletingRetro) return;
+
+    state.deletingRetro = true;
+    const wasSelectedRetro = state.selectedRetroId === retroId;
+    const submit = document.querySelector("#confirm-delete-retro");
+    submit.disabled = true;
+    submit.textContent = "Deleting…";
+    document.querySelectorAll('[data-dialog-cancel="delete-retro"]').forEach((button) => { button.disabled = true; });
+    const patch = window.RetroBoardWorkflow.retroDeletionPatch(state.retros, retroId, state.team?.activeRetroId);
+    try {
+      await ref().update(patch);
+      delete state.retros[retroId];
+      if (Object.hasOwn(patch, "meta/activeRetroId")) {
+        state.team = { ...state.team, activeRetroId: patch["meta/activeRetroId"] };
+      }
+      if (wasSelectedRetro) {
+        detach(state.cardsCleanup);
+        state.ownCards = {};
+        state.allCards = {};
+        state.discussions = {};
+        state.readiness = {};
+        state.selectedRetroId = state.team?.activeRetroId && state.retros[state.team.activeRetroId]
+          ? state.team.activeRetroId
+          : Object.entries(state.retros).sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0))[0]?.[0] || null;
+      }
+      deleteRetroDialog.close();
+      state.pendingDeleteRetroId = null;
+      openArchive();
+      setFeedback(`Deleted “${retro.title || "Untitled retro"}”.`);
+      render();
+    } catch (error) {
+      deleteRetroDialog.close();
+      state.pendingDeleteRetroId = null;
+      setFeedback("", friendlyError(error));
+      render();
+    } finally {
+      state.deletingRetro = false;
+      submit.disabled = false;
+      submit.textContent = "Delete retro";
+      document.querySelectorAll('[data-dialog-cancel="delete-retro"]').forEach((button) => { button.disabled = false; });
+    }
+  }
+
   async function createRetro() {
     const title = document.querySelector("#retro-title").value.trim(); if (!title) return;
     const id = `retro-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; const now = Date.now();
@@ -762,7 +825,13 @@
       const routeId = routeRetroId();
       if (window.location.hash === "#rooms") { state.view = "rooms"; detach(state.cardsCleanup); render(); }
       else if (routeId && state.retros[routeId]) { state.selectedRetroId = routeId; state.view = "board"; attachCards(); }
-      else { state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null; state.view = "archive"; detach(state.cardsCleanup); render(); }
+      else {
+        state.selectedRetroId = state.team?.activeRetroId || Object.keys(state.retros)[0] || null;
+        state.view = "archive";
+        detach(state.cardsCleanup);
+        state.ownCards = {}; state.allCards = {}; state.discussions = {}; state.readiness = {};
+        render();
+      }
     }));
     state.listenerCleanups.push(listen(ref("members"), (snap) => { state.members = snap.val() || {}; render(); }));
     watchAccessRequests();
@@ -834,6 +903,7 @@
     if (action === "show-all") { state.discussionFilter = "all"; render(); }
     if (action === "show-undiscussed") { state.discussionFilter = "undiscussed"; render(); }
     if (action === "new-retro") openRetroDialog();
+    if (action === "delete-retro") openDeleteRetroDialog(button.dataset.retroId || state.selectedRetroId);
     if (action === "open-retro") openRetro(button.dataset.retroId);
     if (action === "archive") openArchive();
     if (action === "rooms") openRooms();
@@ -860,6 +930,17 @@
   });
   document.querySelectorAll('[data-dialog-cancel="card"]').forEach((button) => button.addEventListener("click", () => { cardDialog.close(); state.editing = null; }));
   document.querySelectorAll('[data-dialog-cancel="retro"]').forEach((button) => button.addEventListener("click", () => retroDialog.close()));
+  document.querySelectorAll('[data-dialog-cancel="delete-retro"]').forEach((button) => button.addEventListener("click", () => deleteRetroDialog.close()));
+  deleteRetroDialog.addEventListener("close", () => {
+    if (!state.deletingRetro) state.pendingDeleteRetroId = null;
+  });
+  deleteRetroDialog.addEventListener("cancel", (event) => {
+    if (state.deletingRetro) event.preventDefault();
+  });
+  deleteRetroForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    deleteRetro();
+  });
   window.addEventListener("hashchange", applyRoute);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") stopTitleFlash(); });
 

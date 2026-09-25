@@ -13,7 +13,7 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 - Add, edit, and delete only your own cards
 - Member-only readiness markers and an admin view of the room’s ready check-in
 - Admin-controlled 1-, 5-, or 10-minute writing timer with browser notifications
-- Admin-only reveal, re-hide, and new-retro creation
+- Admin-only reveal, re-hide, retro creation, and permanent retro deletion
 - Realtime card updates plus a searchable Retro Archive with stable IDs and shareable direct links
 - Admin discussion checkmarks and an Undiscussed focus view after a retro is revealed
 - Responsive dark interface with no build step or paid dependency
@@ -100,6 +100,7 @@ Only admins can start the writing timer. Its countdown is based on shared start/
 - The frontend never downloads all cards while `status` is `hidden`. Hiding a revealed retro immediately clears shared cards and discussion markers from the active browser view before the database update finishes.
 - The rules also block direct database reads of other people’s hidden card paths.
 - Only an existing admin can reveal or re-hide a retro, create retros, edit room metadata, approve people, or assign admin roles. This is enforced by the database rules, not just the interface.
+- Only admins can delete a retro. Deletion permanently removes that retro and its cards, readiness markers, and discussion checkmarks in one database update; if it was the room's active retro, the room points to the newest remaining retro. The archive and open-board screens both offer deletion with a confirmation.
 - Only admins can write timer settings. Members can read and change only their own readiness marker; admins can read the room’s markers. The timer and readiness permissions are enforced by database rules.
 - Members can only write below their own UID card path.
 - Only room admins can mark a revealed card as discussed; every member can see that marker after reveal.
@@ -117,6 +118,7 @@ Hiding a retro restores database access to own-card-only visibility. It cannot r
 5. While hidden, confirm a member sees only their own cards. Reveal the retro and confirm all approved members see every card and discussion marker live.
 6. Mark cards discussed, use **All** and **Undiscussed**, then choose **Hide responses**. Shared cards and markers should disappear immediately, leaving each member with only their own cards.
 7. Create another retro and confirm earlier retros remain in the archive after refreshing the page.
+8. As an admin, delete an older retro from the archive and the open current retro from its board. Confirm cancellation changes nothing; confirm deletion removes only the selected retro and its associated cards, readiness, and discussion markers. Verify deleting the active retro selects the newest remaining one, deleting the final retro leaves the room with none, and a non-admin cannot delete the data branches directly.
 
 ## Repository files
 

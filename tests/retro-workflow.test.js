@@ -70,3 +70,28 @@ test("each start and expiry notification is claimed only once per session", () =
   assert.equal(workflow.claimNotification(started, storage), false);
   assert.equal(workflow.claimNotification(expired, storage), true);
 });
+
+test("deleting the active retro removes all retro data and selects the newest remaining retro", () => {
+  assert.deepEqual(workflow.retroDeletionPatch?.({
+    "retro-old": { createdAt: 100 },
+    "retro-current": { createdAt: 200 }
+  }, "retro-current", "retro-current"), {
+    "retros/retro-current": null,
+    "cards/retro-current": null,
+    "readiness/retro-current": null,
+    "discussions/retro-current": null,
+    "meta/activeRetroId": "retro-old"
+  });
+});
+
+test("deleting a non-active retro leaves the room's active retro unchanged", () => {
+  assert.deepEqual(workflow.retroDeletionPatch?.({
+    "retro-old": { createdAt: 100 },
+    "retro-current": { createdAt: 200 }
+  }, "retro-old", "retro-current"), {
+    "retros/retro-old": null,
+    "cards/retro-old": null,
+    "readiness/retro-old": null,
+    "discussions/retro-old": null
+  });
+});

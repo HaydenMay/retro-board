@@ -53,6 +53,23 @@
       </form>
     </dialog>
 
+    <dialog id="delete-retro-dialog" class="dialog" aria-labelledby="delete-retro-dialog-title" aria-describedby="delete-retro-warning">
+      <form id="delete-retro-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">DELETE RETRO</p>
+            <h2 id="delete-retro-dialog-title">Delete this retro?</h2>
+          </div>
+          <button class="icon-button" type="button" data-dialog-cancel="delete-retro" aria-label="Close">×</button>
+        </div>
+        <p class="delete-retro-warning" id="delete-retro-warning">This permanently removes <strong id="delete-retro-name"></strong>, including its cards, readiness marks, and discussion checkmarks. This cannot be undone.</p>
+        <div class="dialog-actions">
+          <button class="button ghost" type="button" data-dialog-cancel="delete-retro" autofocus>Cancel</button>
+          <button class="button danger" id="confirm-delete-retro" type="submit">Delete retro</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Firebase compat builds keep this deliberately dependency-free. -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>

@@ -63,6 +63,22 @@
     return patch;
   }
 
+  function retroDeletionPatch(retros, retroId, activeRetroId) {
+    const patch = {
+      [`retros/${retroId}`]: null,
+      [`cards/${retroId}`]: null,
+      [`readiness/${retroId}`]: null,
+      [`discussions/${retroId}`]: null
+    };
+    if (activeRetroId === retroId) {
+      const nextActiveRetroId = Object.entries(retros || {})
+        .filter(([id, retro]) => id !== retroId && Boolean(retro))
+        .sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0))[0]?.[0] || null;
+      patch["meta/activeRetroId"] = nextActiveRetroId;
+    }
+    return patch;
+  }
+
   function shouldNotify(apiAvailable, visibilityState, permission) {
     return Boolean(apiAvailable && visibilityState === "hidden" && permission === "granted");
   }
@@ -93,6 +109,7 @@
     formatTime,
     readinessSummary,
     cardMutationPatch,
+    retroDeletionPatch,
     shouldNotify,
     notificationKey,
     claimNotification

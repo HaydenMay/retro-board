@@ -29,6 +29,7 @@
         "readiness": {
           "$retroId": {
             ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin'",
+            ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' && !newData.exists()",
             "$memberId": {
               ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (auth.uid === $memberId || root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin')",
               ".write": "auth != null && auth.uid === $memberId && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (!newData.exists() || root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'hidden')",
@@ -45,6 +46,7 @@
         "cards": {
           "$retroId": {
             ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'revealed'",
+            ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' && !newData.exists()",
             "$authorId": {
               ".read": "auth != null && auth.uid === $authorId && root.child('teams').child($teamId).child('members').child(auth.uid).exists()",
               "$cardId": {
@@ -57,6 +59,7 @@
         "discussions": {
           "$retroId": {
             ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'revealed'",
+            ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' && !newData.exists()",
             "$authorId": {
               "$cardId": {
                 ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin' && root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'revealed'",
