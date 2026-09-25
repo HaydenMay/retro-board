@@ -32,7 +32,13 @@
             "$memberId": {
               ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (auth.uid === $memberId || root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin')",
               ".write": "auth != null && auth.uid === $memberId && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (!newData.exists() || root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'hidden')",
-              ".validate": "!newData.exists() || (newData.hasChildren(['readyAt']) && newData.numChildren() === 1 && newData.child('readyAt').isNumber())"
+              ".validate": "!newData.exists() || (newData.hasChildren(['readyAt']) && newData.child('readyAt').isNumber())",
+              "readyAt": {
+                ".validate": "newData.isNumber()"
+              },
+              "$other": {
+                ".validate": false
+              }
             }
           }
         },
