@@ -11,6 +11,8 @@ The important privacy property is enforced in Firebase Realtime Database rules: 
 - Admin-approved teammate access requests
 - Three fixed retrospective columns
 - Add, edit, and delete only your own cards
+- Member-only readiness markers and an admin view of the room’s ready check-in
+- Admin-controlled 1-, 5-, or 10-minute writing timer with browser notifications
 - Admin-only reveal, re-hide, and new-retro creation
 - Realtime card updates plus a searchable Retro Archive with stable IDs and shareable direct links
 - Admin discussion checkmarks and an Undiscussed focus view after a retro is revealed
@@ -79,7 +81,8 @@ For local development and the deployed Pages URL, add their hostnames under **Au
 teams/<teamId>
   meta                 # room title, room code, current retro
   members/<uid>        # approved members and admin role
-  retros/<retroId>     # title + hidden/revealed state
+  retros/<retroId>     # title, hidden/revealed state, and admin-controlled timer timestamps
+  readiness/<retroId>/<uid>  # a member's private ready marker
   cards/<retroId>/<uid>/<cardId>
   discussions/<retroId>/<cardAuthorUid>/<cardId>  # admin-managed, revealed-only checkmarks
 
@@ -88,11 +91,16 @@ accessRequests/<teamId>/<uid>
 
 Anonymous Authentication gives each browser a real Firebase UID that persists locally. The database rules bind card writes to that UID, so changing browser storage cannot turn a member into an admin or expose someone else’s hidden cards.
 
+While a retro is hidden, each approved member can mark themselves ready. The marker is private to that member and room admins; it does not reveal whether they wrote cards or how many. The admin’s count uses all approved room members, including those not currently online. Adding, editing, or deleting a card atomically clears that member’s ready marker.
+
+Only admins can start the writing timer. Its countdown is based on shared start/end timestamps rather than per-second database updates. Browser notifications are optional and best-effort: they require permission and an open, connected app tab. Background tabs get alerts when the timer starts and expires; visible tabs use the on-page timer. Closing the browser or losing the connection prevents notifications, and the timer never reveals responses automatically.
+
 ## Security notes
 
 - The frontend never downloads all cards while `status` is `hidden`. Hiding a revealed retro immediately clears shared cards and discussion markers from the active browser view before the database update finishes.
 - The rules also block direct database reads of other people’s hidden card paths.
 - Only an existing admin can reveal or re-hide a retro, create retros, edit room metadata, approve people, or assign admin roles. This is enforced by the database rules, not just the interface.
+- Only admins can write timer settings. Members can read and change only their own readiness marker; admins can read the room’s markers. The timer and readiness permissions are enforced by database rules.
 - Members can only write below their own UID card path.
 - Only room admins can mark a revealed card as discussed; every member can see that marker after reveal.
 - Members may remove only their own membership record to leave a room; admins can remove other members.
@@ -103,14 +111,17 @@ Hiding a retro restores database access to own-card-only visibility. It cannot r
 ## Quick verification
 
 1. Create a room in one browser and request access from another; approve the request and refresh both browsers to confirm the membership remains approved.
-2. Create a retro, add cards in every column, and confirm each member can edit or delete only their own cards.
-3. While hidden, confirm a member sees only their own cards. Reveal the retro and confirm all approved members see every card and discussion marker live.
-4. Mark cards discussed, use **All** and **Undiscussed**, then choose **Hide responses**. Shared cards and markers should disappear immediately, leaving each member with only their own cards.
-5. Create another retro and confirm earlier retros remain in the archive after refreshing the page.
+2. Create a hidden retro. Mark members ready in turn and confirm only the admin sees the room-wide names/count; each member should see only their own status.
+3. Add, edit, or delete a card after marking ready and confirm that member’s ready marker clears. Confirm a different member’s marker is unchanged.
+4. Start each timer preset as admin and verify the countdown syncs across browsers. At zero, confirm the board stays hidden and background tabs with notification permission get an alert.
+5. While hidden, confirm a member sees only their own cards. Reveal the retro and confirm all approved members see every card and discussion marker live.
+6. Mark cards discussed, use **All** and **Undiscussed**, then choose **Hide responses**. Shared cards and markers should disappear immediately, leaving each member with only their own cards.
+7. Create another retro and confirm earlier retros remain in the archive after refreshing the page.
 
 ## Repository files
 
-- `index.html`, `styles.css`, `app.js` — dependency-free app
+- `index.html`, `styles.css`, `app.js`, `retro-workflow.js` — dependency-free app
 - `firebase.database.rules.json` — security rules to publish
+- `tests/` — dependency-free Node.js checks for workflow helpers and the checked-in rules
 - `firebase-config.example.js` — safe local config template
 - `.github/workflows/deploy-pages.yml` — GitHub Pages deployment

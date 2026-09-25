@@ -34,6 +34,7 @@
     ownCards: {},
     allCards: {},
     discussions: {},
+    readiness: {},
     listenerCleanups: [],
     membershipCleanups: [],
     requestCleanups: [],
@@ -47,6 +48,9 @@
   let db;
   let auth;
   let feedbackTimer;
+  let countdownInterval = null;
+  let notificationPermissionPromise = null;
+  const timerTimeouts = new Map();
 
   function validConfig() {
     return config && config.apiKey && config.apiKey !== "YOUR_API_KEY" && config.databaseURL;
@@ -120,6 +124,120 @@
   function ref(path = "") { return db.ref(`teams/${state.teamId}${path ? `/${path}` : ""}`); }
   function requestRef(path = "") { return db.ref(`accessRequests/${state.teamId}${path ? `/${path}` : ""}`); }
 
+  function clearTimerTimeouts() {
+    timerTimeouts.forEach((timeout) => clearTimeout(timeout));
+    timerTimeouts.clear();
+  }
+
+  function stopCountdownTicker() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+
+  function updateCountdown() {
+    const retro = activeRetro();
+    const display = document.querySelector("#writing-countdown");
+    if (!display || state.view !== "board" || !retro || retro.status !== "hidden") {
+      stopCountdownTicker();
+      return;
+    }
+    const timer = window.RetroBoardWorkflow.timerState(retro);
+    if (timer.status !== "running") {
+      stopCountdownTicker();
+      display.textContent = timer.status === "expired" ? "0:00" : "Not started";
+      if (timer.status === "expired" && display.dataset.timerState !== "expired") render();
+      return;
+    }
+    display.textContent = window.RetroBoardWorkflow.formatTime(timer.remainingMs);
+  }
+
+  function startCountdownTicker() {
+    if (countdownInterval) return;
+    updateCountdown();
+    countdownInterval = setInterval(updateCountdown, 250);
+  }
+
+  function requestTimerNotifications() {
+    if (typeof window.Notification !== "function" || window.Notification.permission !== "default") return Promise.resolve(window.Notification?.permission || "unsupported");
+    if (notificationPermissionPromise) return notificationPermissionPromise;
+    try {
+      notificationPermissionPromise = Promise.resolve(window.Notification.requestPermission()).catch(() => "denied");
+    } catch (_error) {
+      notificationPermissionPromise = Promise.resolve("denied");
+    }
+    return notificationPermissionPromise;
+  }
+
+  const ORIGINAL_TITLE = document.title;
+  let titleFlashInterval = null;
+
+  function stopTitleFlash() {
+    if (titleFlashInterval) clearInterval(titleFlashInterval);
+    titleFlashInterval = null;
+    document.title = ORIGINAL_TITLE;
+  }
+
+  function flashTabTitle(message) {
+    if (document.visibilityState !== "hidden") return;
+    stopTitleFlash();
+    let showMessage = true;
+    titleFlashInterval = setInterval(() => {
+      document.title = showMessage ? `⏱️ ${message}` : ORIGINAL_TITLE;
+      showMessage = !showMessage;
+    }, 1000);
+  }
+
+  function notifyTimerEvent(retroId, retro, eventName) {
+    const workflow = window.RetroBoardWorkflow;
+    const title = retro?.title || "Retro board";
+    const notificationTitle = eventName === "started" ? "Writing timer started" : "Writing time is up";
+    if (eventName === "started") flashTabTitle("Writing timer started!");
+    if (eventName === "expired") flashTabTitle("Writing time is up!");
+
+    const notification = window.Notification;
+    if (typeof notification !== "function" || !workflow.shouldNotify(true, document.visibilityState, notification.permission)) return;
+    const startedAt = Number(retro.timerStartedAt);
+    const key = workflow.notificationKey(retroId, eventName, startedAt);
+    let storage;
+    try { storage = window.sessionStorage; } catch (_error) { storage = null; }
+    if (!workflow.claimNotification(key, storage)) return;
+
+    const timerLength = workflow.TIMER_PRESETS.find((preset) => preset.seconds === Number(retro.timerDurationSeconds))?.label || "writing";
+    const body = eventName === "started"
+      ? `The admin started a ${timerLength} timer for “${title}”.`
+      : `Time is up for “${title}”. Responses are still hidden.`;
+    try {
+      const message = new notification(notificationTitle, { body, tag: key });
+      message.onclick = () => {
+        window.focus();
+        if (state.member && state.retros[retroId]) openRetro(retroId);
+        message.close();
+      };
+    } catch (_error) {
+      // Browser notifications can be unavailable even after permission was granted.
+    }
+  }
+
+  function syncTimerNotifications(retros) {
+    clearTimerTimeouts();
+    Object.entries(retros || {}).forEach(([retroId, retro]) => {
+      const timer = window.RetroBoardWorkflow.timerState(retro);
+      if (retro?.status !== "hidden" || timer.status !== "running") return;
+      const startedAt = Number(retro.timerStartedAt);
+      const endsAt = Number(retro.timerEndsAt);
+      const timeout = setTimeout(() => {
+        timerTimeouts.delete(retroId);
+        const current = state.retros[retroId];
+        if (!current || current.status !== "hidden" || Number(current.timerStartedAt) !== startedAt || Number(current.timerEndsAt) !== endsAt) return;
+        if (window.RetroBoardWorkflow.timerState(current).status === "expired") {
+          notifyTimerEvent(retroId, current, "expired");
+          if (state.view === "board" && state.selectedRetroId === retroId) render();
+        }
+      }, Math.max(0, endsAt - Date.now()));
+      timerTimeouts.set(retroId, timeout);
+    });
+  }
+
   function detach(list) { list.splice(0).forEach((cleanup) => cleanup()); }
   function listen(reference, callback, errorCallback) {
     const onError = errorCallback || ((error) => { state.error = friendlyError(error); render(); });
@@ -147,6 +265,8 @@
   }
 
   function render() {
+    const writingBoard = state.view === "board" && activeRetro()?.status === "hidden";
+    if (!writingBoard) stopCountdownTicker();
     if (!validConfig()) {
       app.innerHTML = setupNeeded();
       return;
@@ -169,6 +289,7 @@
     }
     if (state.view === "archive" && document.activeElement?.id === "archive-search" && renderArchiveResults()) return;
     app.innerHTML = state.view === "board" && activeRetro() ? boardScreen() : archiveScreen();
+    if (writingBoard) startCountdownTicker();
   }
 
   function loadingScreen(text) {
@@ -228,6 +349,7 @@
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
       ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing.</strong> Teammates’ cards stay hidden until you reveal the board.</p></aside>` : ""}
+      ${!isRevealed ? writingToolsMarkup(retro) : ""}
       <section class="board">${COLUMNS.map((column) => columnMarkup(column)).join("")}</section>
       ${isAdmin() ? adminAccessMarkup() : ""}
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
@@ -318,6 +440,29 @@
     return `<article class="column"><div class="column-head"><h2 class="column-title">${column.title}</h2><span class="card-count">${countLabel}</span></div><div class="cards">${visibleCards.length ? visibleCards.map((card) => cardMarkup(card, column)).join("") : `<p class="empty-column">${emptyMessage}</p>`}</div><button class="button add-card" data-action="add-card" data-column="${column.id}">+ Add card</button></article>`;
   }
 
+  function writingToolsMarkup(retro) {
+    const workflow = window.RetroBoardWorkflow;
+    const timer = workflow.timerState(retro);
+    const readiness = workflow.readinessSummary(state.members, state.readiness);
+    const ownReady = Boolean(state.readiness[state.user.uid]?.readyAt);
+    const timerMessage = timer.status === "running"
+      ? `<span id="writing-countdown" class="writing-countdown" data-timer-state="running" role="timer" aria-label="Time remaining">${workflow.formatTime(timer.remainingMs)}</span><span class="timer-caption">remaining</span>`
+      : timer.status === "expired"
+        ? `<span id="writing-countdown" class="writing-countdown" data-timer-state="expired" role="timer" aria-label="Timer finished">0:00</span><p class="timer-expired" role="status">Time’s up. Responses are still hidden.</p>`
+        : `<span id="writing-countdown" class="writing-countdown idle" data-timer-state="idle">Not started</span><p class="timer-caption">The admin can start a writing timer when the team is ready.</p>`;
+    const timerControls = isAdmin() && timer.status !== "running"
+      ? `<div class="timer-controls"><label for="writing-timer-duration">Duration</label><select id="writing-timer-duration" aria-label="Writing timer duration">${workflow.TIMER_PRESETS.map((preset) => `<option value="${preset.seconds}" ${preset.seconds === 300 ? "selected" : ""}>${preset.label}</option>`).join("")}</select><button class="button primary" data-action="start-timer">${timer.status === "expired" ? "Start another timer" : "Start timer"}</button></div>`
+      : "";
+    const readinessMarkup = isAdmin()
+      ? `<div class="readiness-summary"><span class="readiness-count">${readiness.readyCount} of ${readiness.total} ${readiness.total === 1 ? "member" : "members"} ready</span><span class="readiness-note">Ready status is self-reported; cards stay hidden.</span></div><ul class="readiness-list">${readiness.ready.map((member) => `<li><span>${esc(member.name)}</span><span class="readiness-badge ready">Ready</span></li>`).join("")}${readiness.waiting.map((member) => `<li><span>${esc(member.name)}</span><span class="readiness-badge">Not marked ready</span></li>`).join("")}</ul>`
+      : `<p class="own-readiness">Your status: <strong>${ownReady ? "Ready" : "Not ready"}</strong></p>`;
+
+    return `<section class="writing-tools" aria-label="Private writing controls">
+      <section class="writing-panel timer-panel"><header class="writing-panel-heading"><div><p class="eyebrow">PRIVATE WRITING</p><h2>Writing timer</h2></div></header><div class="timer-readout">${timerMessage}</div>${timerControls}</section>
+      <section class="writing-panel readiness-panel"><header class="writing-panel-heading"><div><p class="eyebrow">TEAM CHECK-IN</p><h2>${isAdmin() ? "Ready to reveal" : "Your readiness"}</h2></div></header>${readinessMarkup}<button class="button ${ownReady ? "ghost" : "primary"} ready-toggle" data-action="toggle-ready" aria-pressed="${ownReady}">${ownReady ? "I’m still editing" : "I’m ready"}</button></section>
+    </section>`;
+  }
+
   function cardMarkup(card, column) {
     const own = card.authorId === state.user.uid;
     const owner = own ? "You" : nameFromMember(state.members[card.authorId]);
@@ -375,7 +520,8 @@
   function resetRoomState() {
     detach(state.listenerCleanups); detach(state.membershipCleanups); detach(state.requestCleanups); detach(state.cardsCleanup);
     state.member = null; state.team = null; state.retros = {}; state.members = {}; state.requests = {};
-    state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.discussionFilter = "all"; state.ownCards = {}; state.allCards = {}; state.discussions = {};
+    state.selectedRetroId = null; state.view = "archive"; state.archiveSearch = ""; state.discussionFilter = "all"; state.ownCards = {}; state.allCards = {}; state.discussions = {}; state.readiness = {};
+    clearTimerTimeouts(); stopCountdownTicker(); stopTitleFlash();
   }
 
   function updateRoomUrl(room, replace = false) {
@@ -461,22 +607,46 @@
     const now = Date.now(); const retroId = state.selectedRetroId;
     try {
       if (state.editing.id) {
-        await ref(`cards/${retroId}/${state.user.uid}/${state.editing.id}`).update({ text, updatedAt: now });
+        await ref().update(window.RetroBoardWorkflow.cardMutationPatch(retroId, state.user.uid, state.editing.id, { text, updatedAt: now }));
       } else {
         const newRef = ref(`cards/${retroId}/${state.user.uid}`).push();
-        await newRef.set({ authorId: state.user.uid, column: state.editing.column, text, createdAt: now, updatedAt: now });
+        await ref().update(window.RetroBoardWorkflow.cardMutationPatch(retroId, state.user.uid, newRef.key, { authorId: state.user.uid, column: state.editing.column, text, createdAt: now, updatedAt: now }));
       }
       cardDialog.close(); state.editing = null;
     } catch (error) { setFeedback("", friendlyError(error)); render(); }
   }
 
   function findCard(authorId, cardId) { return flattenCards(activeRetro()?.status === "revealed" ? state.allCards : state.ownCards).find((card) => card.authorId === authorId && card.id === cardId); }
-  async function deleteCard(authorId, cardId) { if (!confirm("Delete this card?")) return; try { await ref(`cards/${state.selectedRetroId}/${authorId}/${cardId}`).remove(); } catch (error) { setFeedback("", friendlyError(error)); render(); } }
+  async function deleteCard(authorId, cardId) {
+    if (authorId !== state.user.uid || !confirm("Delete this card?")) return;
+    try { await ref().update(window.RetroBoardWorkflow.cardMutationPatch(state.selectedRetroId, state.user.uid, cardId, null)); }
+    catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
+
+  async function toggleReady() {
+    const retro = activeRetro();
+    if (!state.user || !retro || retro.status !== "hidden") return;
+    const reference = ref(`readiness/${state.selectedRetroId}/${state.user.uid}`);
+    try {
+      if (state.readiness[state.user.uid]?.readyAt) await reference.remove();
+      else await reference.set({ readyAt: Date.now() });
+    } catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
+
+  async function startWritingTimer() {
+    const retro = activeRetro();
+    if (!isAdmin() || !retro || retro.status !== "hidden" || window.RetroBoardWorkflow.timerState(retro).status === "running") return;
+    const durationSeconds = Number(document.querySelector("#writing-timer-duration")?.value || 300);
+    const timer = window.RetroBoardWorkflow.timerFields(Date.now(), durationSeconds);
+    if (!timer) return;
+    try { await requestTimerNotifications(); await ref(`retros/${state.selectedRetroId}`).update(timer); }
+    catch (error) { setFeedback("", friendlyError(error)); render(); }
+  }
 
   async function reveal() {
     if (!isAdmin() || activeRetro()?.status !== "hidden") return;
     if (!confirm("Reveal all responses to the team?")) return;
-    try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid }); }
+    try { await ref(`retros/${state.selectedRetroId}`).update({ status: "revealed", revealedAt: Date.now(), revealedBy: state.user.uid, timerStartedAt: null, timerDurationSeconds: null, timerEndsAt: null }); }
     catch (error) { setFeedback("", friendlyError(error)); render(); }
   }
 
@@ -559,10 +729,17 @@
   }
 
   function attachCards() {
-    detach(state.cardsCleanup); state.ownCards = {}; state.allCards = {}; state.discussions = {};
+    detach(state.cardsCleanup); state.ownCards = {}; state.allCards = {}; state.discussions = {}; state.readiness = {};
     const retro = activeRetro(); if (!retro || !state.user) { render(); return; }
     state.cardsCleanup.push(listen(ref(`cards/${state.selectedRetroId}/${state.user.uid}`), (snap) => { state.ownCards = { [state.user.uid]: snap.val() || {} }; render(); }));
-    if (retro.status === "revealed") {
+    if (retro.status === "hidden") {
+      const readinessPath = `readiness/${state.selectedRetroId}`;
+      if (isAdmin()) {
+        state.cardsCleanup.push(listen(ref(readinessPath), (snap) => { state.readiness = snap.val() || {}; render(); }));
+      } else {
+        state.cardsCleanup.push(listen(ref(`${readinessPath}/${state.user.uid}`), (snap) => { state.readiness = snap.val() ? { [state.user.uid]: snap.val() } : {}; render(); }));
+      }
+    } else if (retro.status === "revealed") {
       state.cardsCleanup.push(listen(ref(`cards/${state.selectedRetroId}`), (snap) => { state.allCards = snap.val() || {}; render(); }));
       state.cardsCleanup.push(listen(ref(`discussions/${state.selectedRetroId}`), (snap) => { state.discussions = snap.val() || {}; render(); }));
     }
@@ -573,7 +750,15 @@
     detach(state.listenerCleanups);
     state.listenerCleanups.push(listen(ref("meta"), (snap) => { state.team = snap.val() || {}; render(); }));
     state.listenerCleanups.push(listen(ref("retros"), (snap) => {
-      state.retros = snap.val() || {};
+      const nextRetros = snap.val() || {};
+      Object.entries(nextRetros).forEach(([retroId, retro]) => {
+        const previous = state.retros[retroId];
+        if (previous && retro?.status === "hidden" && Number(retro.timerStartedAt) > 0 && Number(retro.timerStartedAt) !== Number(previous.timerStartedAt)) {
+          notifyTimerEvent(retroId, retro, "started");
+        }
+      });
+      state.retros = nextRetros;
+      syncTimerNotifications(state.retros);
       const routeId = routeRetroId();
       if (window.location.hash === "#rooms") { state.view = "rooms"; detach(state.cardsCleanup); render(); }
       else if (routeId && state.retros[routeId]) { state.selectedRetroId = routeId; state.view = "board"; attachCards(); }
@@ -611,7 +796,7 @@
       const wasMember = Boolean(state.member); const wasAdmin = isAdmin(); state.member = snap.val();
       if (state.member && !wasMember) attachMemberData();
       if (state.member && !wasAdmin && isAdmin()) attachMemberData();
-      if (!state.member && wasMember) { detach(state.listenerCleanups); detach(state.requestCleanups); detach(state.cardsCleanup); state.retros = {}; state.requests = {}; }
+      if (!state.member && wasMember) { detach(state.listenerCleanups); detach(state.requestCleanups); detach(state.cardsCleanup); state.retros = {}; state.requests = {}; state.readiness = {}; syncTimerNotifications({}); }
       render();
     }, (error) => { state.member = null; state.error = friendlyError(error); render(); });
     state.membershipCleanups.push(() => memberReference.off("value"));
@@ -626,7 +811,9 @@
   }
 
   app.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-action]"); if (!button) return;
+    const button = event.target.closest("[data-action]");
+    if (state.member || ["start-room", "join-room", "request-access"].includes(button?.dataset.action)) requestTimerNotifications();
+    if (!button) return;
     const { action, column, cardId, authorId, uid } = button.dataset;
     if (action === "request-access") requestAccess();
     if (action === "start-room") startRoom();
@@ -639,6 +826,8 @@
     if (action === "add-card") openCard(column);
     if (action === "edit-card") { const card = findCard(authorId, cardId); if (card) openCard(card.column, card); }
     if (action === "delete-card") deleteCard(authorId, cardId);
+    if (action === "toggle-ready") toggleReady();
+    if (action === "start-timer") startWritingTimer();
     if (action === "reveal") reveal();
     if (action === "hide") hideResponses();
     if (action === "toggle-discussed") toggleDiscussed(authorId, cardId);
@@ -672,6 +861,7 @@
   document.querySelectorAll('[data-dialog-cancel="card"]').forEach((button) => button.addEventListener("click", () => { cardDialog.close(); state.editing = null; }));
   document.querySelectorAll('[data-dialog-cancel="retro"]').forEach((button) => button.addEventListener("click", () => retroDialog.close()));
   window.addEventListener("hashchange", applyRoute);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") stopTitleFlash(); });
 
   async function start() {
     if (!validConfig()) { render(); return; }

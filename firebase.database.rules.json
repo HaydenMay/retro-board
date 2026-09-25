@@ -23,7 +23,17 @@
           "$retroId": {
             ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists()",
             ".write": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin'",
-            ".validate": "newData.hasChildren(['title', 'status', 'createdAt', 'createdBy']) && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 100 && (newData.child('status').val() === 'hidden' || newData.child('status').val() === 'revealed') && (!data.exists() ? newData.child('createdBy').val() === auth.uid : newData.child('createdBy').val() === data.child('createdBy').val())"
+            ".validate": "newData.hasChildren(['title', 'status', 'createdAt', 'createdBy']) && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('title').val().length <= 100 && (newData.child('status').val() === 'hidden' || newData.child('status').val() === 'revealed') && (!data.exists() ? newData.child('createdBy').val() === auth.uid : newData.child('createdBy').val() === data.child('createdBy').val()) && ((!newData.child('timerStartedAt').exists() && !newData.child('timerDurationSeconds').exists() && !newData.child('timerEndsAt').exists()) || (newData.child('timerStartedAt').isNumber() && (newData.child('timerDurationSeconds').val() === 60 || newData.child('timerDurationSeconds').val() === 300 || newData.child('timerDurationSeconds').val() === 600) && newData.child('timerEndsAt').isNumber() && newData.child('timerEndsAt').val() === newData.child('timerStartedAt').val() + newData.child('timerDurationSeconds').val() * 1000))"
+          }
+        },
+        "readiness": {
+          "$retroId": {
+            ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin'",
+            "$memberId": {
+              ".read": "auth != null && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (auth.uid === $memberId || root.child('teams').child($teamId).child('members').child(auth.uid).child('role').val() === 'admin')",
+              ".write": "auth != null && auth.uid === $memberId && root.child('teams').child($teamId).child('members').child(auth.uid).exists() && (!newData.exists() || root.child('teams').child($teamId).child('retros').child($retroId).child('status').val() === 'hidden')",
+              ".validate": "!newData.exists() || (newData.hasChildren(['readyAt']) && newData.numChildren() === 1 && newData.child('readyAt').isNumber())"
+            }
           }
         },
         "cards": {
