@@ -52,6 +52,10 @@
     return { total: rows.length, readyCount: ready.length, ready, waiting };
   }
 
+  function readinessActionLabel(isReady) {
+    return isReady ? "Continue adding cards" : "I’m done adding cards";
+  }
+
   function cardMutationPatch(retroId, uid, cardId, changes) {
     const cardPath = `cards/${retroId}/${uid}/${cardId}`;
     const patch = {};
@@ -108,6 +112,7 @@
     timerState,
     formatTime,
     readinessSummary,
+    readinessActionLabel,
     cardMutationPatch,
     retroDeletionPatch,
     shouldNotify,

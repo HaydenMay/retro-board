@@ -34,6 +34,13 @@ test("readiness counts only currently approved members and sorts names", () => {
   assert.deepEqual(summary.waiting.map(({ uid, name }) => [uid, name]), [["b", "Blair"]]);
 });
 
+test("readiness actions describe finishing or continuing to add cards", () => {
+  assert.deepEqual([
+    workflow.readinessActionLabel?.(false),
+    workflow.readinessActionLabel?.(true)
+  ], ["I’m done adding cards", "Continue adding cards"]);
+});
+
 test("card mutations atomically clear only that member's readiness", () => {
   assert.deepEqual(workflow.cardMutationPatch("retro-1", "uid-1", "card-1", {
     text: "Updated",

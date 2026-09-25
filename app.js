@@ -349,13 +349,13 @@
       </section>
       <section class="toolbar">
         <select id="retro-picker" class="retro-picker" aria-label="Choose a retro">${sortedRetros.map(([id, item]) => `<option value="${esc(id)}" ${id === state.selectedRetroId ? "selected" : ""}>${esc(item.title || "Untitled retro")} · ${dateLabel(item.createdAt)}</option>`).join("")}</select>
-        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span><button class="button" data-action="hide">Hide responses</button>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button><button class="button danger" data-action="delete-retro" data-retro-id="${esc(state.selectedRetroId)}">Delete retro</button>` : ""}</div>
+        <div class="toolbar-actions">${isAdmin() && isRevealed ? `<span class="discussion-filter" aria-label="Discussion filter"><button class="filter-button ${state.discussionFilter === "all" ? "selected" : ""}" data-action="show-all">All</button><button class="filter-button ${state.discussionFilter === "undiscussed" ? "selected" : ""}" data-action="show-undiscussed">Undiscussed</button></span><button class="button" data-action="hide">Hide responses</button>` : ""}${isAdmin() && !isRevealed ? `<button class="button primary" data-action="reveal">Reveal board</button>` : ""}${isAdmin() ? `<button class="button" data-action="new-retro">+ New retro</button>` : ""}</div>
       </section>
       <p class="retro-id">Retro ID: <code>${esc(retroCode(state.selectedRetroId, retro))}</code></p>
-      ${!isRevealed ? `<aside class="private-note"><span aria-hidden="true">🔒</span><p><strong>Private writing.</strong> Teammates’ cards stay hidden until you reveal the board.</p></aside>` : ""}
       ${!isRevealed ? writingToolsMarkup(retro) : ""}
       <section class="board">${COLUMNS.map((column) => columnMarkup(column)).join("")}</section>
       ${isAdmin() ? adminAccessMarkup() : ""}
+      ${isAdmin() ? `<section class="delete-retro-zone"><div><p class="eyebrow">DANGER ZONE</p><h2>Delete this retro</h2><p>This permanently removes the retro and its cards from the archive.</p></div><button class="button danger" data-action="delete-retro" data-retro-id="${esc(state.selectedRetroId)}">Delete retro</button></section>` : ""}
       ${state.error ? `<p class="error">${esc(state.error)}</p>` : ""}
       ${state.message ? `<p class="success">${esc(state.message)}</p>` : ""}
     </div>`;
@@ -462,9 +462,9 @@
       ? `<div class="readiness-summary"><span class="readiness-count">${readiness.readyCount} of ${readiness.total} ${readiness.total === 1 ? "member" : "members"} ready</span><span class="readiness-note">Ready status is self-reported; cards stay hidden.</span></div><ul class="readiness-list">${readiness.ready.map((member) => `<li><span>${esc(member.name)}</span><span class="readiness-badge ready">Ready</span></li>`).join("")}${readiness.waiting.map((member) => `<li><span>${esc(member.name)}</span><span class="readiness-badge">Not marked ready</span></li>`).join("")}</ul>`
       : `<p class="own-readiness">Your status: <strong>${ownReady ? "Ready" : "Not ready"}</strong></p>`;
 
-    return `<section class="writing-tools" aria-label="Private writing controls">
-      <section class="writing-panel timer-panel"><header class="writing-panel-heading"><div><p class="eyebrow">PRIVATE WRITING</p><h2>Writing timer</h2></div></header><div class="timer-readout">${timerMessage}</div>${timerControls}</section>
-      <section class="writing-panel readiness-panel"><header class="writing-panel-heading"><div><p class="eyebrow">TEAM CHECK-IN</p><h2>${isAdmin() ? "Ready to reveal" : "Your readiness"}</h2></div></header>${readinessMarkup}<button class="button ${ownReady ? "ghost" : "primary"} ready-toggle" data-action="toggle-ready" aria-pressed="${ownReady}">${ownReady ? "I’m still editing" : "I’m ready"}</button></section>
+    return `<section class="writing-tools" aria-label="Writing controls">
+      <section class="writing-panel timer-panel"><header class="writing-panel-heading"><h2>Writing timer</h2></header><div class="timer-readout">${timerMessage}</div>${timerControls}</section>
+      <section class="writing-panel readiness-panel"><header class="writing-panel-heading"><div><p class="eyebrow">TEAM CHECK-IN</p><h2>${isAdmin() ? "Ready to reveal" : "Your readiness"}</h2></div></header>${readinessMarkup}<button class="button ${ownReady ? "ghost" : "primary"} ready-toggle" data-action="toggle-ready" aria-pressed="${ownReady}">${workflow.readinessActionLabel(ownReady)}</button></section>
     </section>`;
   }
 
